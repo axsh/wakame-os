@@ -1,0 +1,3 @@
+#!/usr/bin/ruby
+require File.expand_path('../../config/path_resolver', __FILE__)
+WakameOS::Runner::Agent.start(ARGV)
