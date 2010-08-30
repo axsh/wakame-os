@@ -1,0 +1,20 @@
+h1{color:green}. Wakame-os
+
+Wakame-os is the Cluster Level Infrastructure Operating System. It is designed to be very simple to handle resources of cluster beyond the different cloud infrastructures. (Amazon EC2, Wakame-vdc, and etc in the future)
+
+h2. Example
+
+<pre>
+<code>
+  require 'rubygems'
+  require 'wakame'
+  
+  process = WakameOS::Process.setup(:credential => {:user => 'your_name'})
+  
+  process.fork {
+    print "Running code on the remote!\n"
+  }
+</code>
+</pre>
+
+
