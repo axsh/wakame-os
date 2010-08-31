@@ -2,13 +2,11 @@ h1{color:green}. Wakame-os
 
 Wakame-os is the Cluster Level Infrastructure Operating System. It is designed to be very simple to handle resources of cluster beyond the different cloud infrastructures. (Amazon EC2, Wakame-vdc, and etc in the future)
 
-h2. Example
+h2. Example: Running a remote code
 
 <pre>
 <code>
-  require 'rubygems'
   require 'wakame'
-  
   process = WakameOS::Process.setup(:credential => {:user => 'your_name'})
   
   process.fork {
@@ -17,4 +15,68 @@ h2. Example
 </code>
 </pre>
 
+h2. Example: Launch a new instance
+
+<pre>
+<code>
+  require 'wakame'
+  credential = {:user => 'your_name'}
+  
+  instance = WakameOS::Client::SyncRpc('instance')
+  instance.create_instances(credential)
+</code>
+</pre>
+
+h2. Example: Configure instances & launch
+
+h3. config/cloud_catalog.rb
+
+<pre>
+<code>
+...(snip)...
+  
+  cc.credential 'amazon_account' do |c|
+    c.access_key        = 'YOUR_ACCESS_KEY'
+    c.secret_access_key = 'YOUR_SECRET_ACCESS_KEY'
+  end
+
+...(snip)...
+
+  cc.spec 'aws_fedora_core_8' do |s|
+    s.credential = 'amazon_account'
+    s.driver = 'aws'
+    s.requirement do |r|
+      r.image_id = 'ami-84db39ed'
+    end
+  end
+
+...(snip)...
+</code>
+</pre>
+
+h3. instance_sample.rb
+
+<pre>
+<code>
+  require 'wakame'
+  credential = {:user => 'your_name'}
+  
+  instance = WakameOS::Client::SyncRpc('instance')
+  instance.create_instances(credential, 'aws_fedora_core_8')
+</code>
+</pre>
+
+h3. fork_sample.rb
+
+<pre>
+<code>
+  require 'wakame'
+  process = WakameOS::Process.setup(:credential => {:user => 'your_name'},
+                                    :spec_name => 'aws_fedora_core_8')
+  
+  process.fork {
+    print "Running code on the remote fedora core 8!\n"
+  }
+</code>
+</pre>
 
