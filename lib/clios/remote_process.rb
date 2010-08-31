@@ -1,4 +1,5 @@
 require 'rubygems'
+require 'util'
 
 require 'thread'
 require 'monitor'
@@ -50,7 +51,7 @@ module WakameOS
           # TODO: Check the arity
 
           @mutex.synchronize {
-            queue_name = "ruby_code.#{::Kernel.rand(999_999_999_999)}" # TODO: be unique
+            queue_name = "ruby_code.#{WakameOS::Util::UniqueKey.new}"
             print "Making a code queue.\n"
             queue = @amqp.queue(queue_name, :auto_delete => true)
             queue.publish(::Marshal.dump({

@@ -571,29 +571,34 @@ module WakameOS
         return false unless job_id_array.is_a?(Array) && job_id_array.size>0
         
         # entry the jobs
+        waiting_jobs = []
+        waiting_agents = []
+        queue_count = nil
+
         queue = nil
         name = queue_name(credential, spec_name)
         @@rabbit_mutex.synchronize {
-          queue = (@job_queue_hash[name] ||= @@amqp.queue(name,
-                                                            :auto_delete => true,
-                                                            :exclusive => false))
-        }
-        waiting_jobs = []
-        job_id_array.each do |job_id|
-          queue.publish(::Marshal.dump(Job.new(job_id, credential, spec_name)))
-          waiting_jobs << job_id
-        end
+          queue = @job_queue_hash[name]
+          queue = @job_queue_hash[name] = @@amqp.queue(name,
+                                                       :auto_delete => true,
+                                                       :exclusive => false) unless queue
 
-        waiting_agents = []
-        hash = _user_credential_hash(credential)
-        _agent_list_mutex(hash).synchronize {
-          agents = _agents(hash)
-          (agents.keys - @job_assign.keys).each do |agent_id|
-            waiting_agents << {:agent_id => agent_id, :load => agents[agent_id].load}
+          job_id_array.each do |job_id|
+            queue.publish(::Marshal.dump(Job.new(job_id, credential, spec_name)))
+            waiting_jobs << job_id
           end
+          queue_count = queue.message_count
+
+          hash = _user_credential_hash(credential)
+          _agent_list_mutex(hash).synchronize {
+            agents = _agents(hash)
+            (agents.keys - @job_assign.keys).each do |agent_id|
+              waiting_agents << {:agent_id => agent_id, :load => agents[agent_id].load}
+            end
+          }
         }
 
-        {:waiting_jobs => waiting_jobs, :waiting_agents => waiting_agents, :queue_count => queue.message_count}
+        {:waiting_jobs => waiting_jobs, :waiting_agents => waiting_agents, :queue_count => queue_count || waiting_agents.size}
       end
       
       # Pop a job (use a user credential)

@@ -1,6 +1,9 @@
+require 'md5'
+
 module WakameOS
   module Util
 
+    # String
     module String
       # Copied from http://github.com/datamapper/extlib/blob/master/lib/extlib/string.rb#L35
       ##
@@ -35,6 +38,16 @@ module WakameOS
       end
 
     end
+
+    class UniqueKey < ::String
+      @@base_ip = nil
+      @@sequencial_number = ::Kernel.rand(99_99_99_99)
+      def initialize
+        @@base_ip = `/sbin/ip route get 8.8.8.8` unless @@base_ip
+        super(Digest::MD5.hexdigest(@@base_ip + ':' + Time.now.to_i.to_s + ':' + @@sequencial_number.to_s + ':' + ::Kernel.rand(999_999_999_999).to_s ))
+      end
+    end
+
   end
 end
 

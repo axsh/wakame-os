@@ -1,5 +1,6 @@
 #
 # require 'daemonize'
+require 'util'
 require "optparse"
 
 # entry point
@@ -11,7 +12,7 @@ module WakameOS
         puts 'Wakame-OS Agent (CLIOS - Cluster Level Infrastructure Operation System)'
         puts 'Copyright (C) Wakame Software Fundation.'
         
-        boot_token = "UNKNOWN.#{::Kernel.rand(999_999_999_999)}"
+        boot_token = "UNKNOWN.#{WakameOS::Util::UniqueKey.new}"
         config = WakameOS::Configuration.default_server
         opts = OptionParser.new
         

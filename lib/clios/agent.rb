@@ -109,10 +109,10 @@ module WakameOS
               print "Waiting a receiving code...\n"
               direct_data = direct_queue.pop
               unless direct_data[:payload]==:queue_empty
-                direct_queue.delete
                 # WE FIND A JOB!
                 @working = true
                 hash = ::Marshal.load(direct_data[:payload])
+                direct_queue.delete
                 
                 code = hash[:code]
                 argv = hash[:argv]
