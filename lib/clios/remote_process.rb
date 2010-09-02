@@ -54,11 +54,10 @@ module WakameOS
             queue_name = "ruby_code.#{WakameOS::Utility::UniqueKey.new}"
             print "Making a code queue.\n"
             queue = @amqp.queue(queue_name, :auto_delete => true)
-            queue.publish(::Marshal.dump({
-                                           :code => WakameOS::Utility::ProcSerializer.dump({}, &block),
-                                           :argv => argv,
-                                         }))
-
+            queue.publish(::Marshal.dump(WakameOS::Utility::Job::RubyProc.new({
+                                                                                :code => WakameOS::Utility::ProcSerializer.dump({}, &block),
+                                                                                :argv => argv,
+                                                                              })))
             print "Insert a job request into the queue.\n"
             response = @agent.process_jobs(@credential, [queue_name], @spec_name)
             print "Response: " + response.inspect + "\n"

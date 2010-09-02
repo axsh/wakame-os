@@ -32,6 +32,9 @@ module WakameOS
 
   module Utility
     autoload :ProcSerializer, 'clios/proc_serializer'
+    module Job
+      autoload :RubyProc, 'clios/job'
+    end
   end
 
 end

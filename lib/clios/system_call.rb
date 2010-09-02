@@ -335,7 +335,7 @@ module WakameOS
           @create_on = DateTime.now
           @update_on = DateTime.now
           @woke_on = DateTime.now
-          @load = 0
+          @work_time = 0.0
         end
         
         def touch
@@ -355,13 +355,13 @@ module WakameOS
           true
         end
 
-        def load
+        def work_time
           now = DateTime.now
           if @job_id
-            @load += now - @work_on
+            @work_time += now - @work_on
             @work_on = now
           end
-          return (@load / (now - @create_on)).to_f
+          return (@work_time / (now - @create_on)).to_f
         end
 
         def assign_job(job_id)
@@ -374,7 +374,7 @@ module WakameOS
           return unless @job_id
           now = DateTime.now
           @job_id = nil
-          @load += now - @work_on
+          @work_time += now - @work_on
         end
 
         def to_hash
@@ -382,8 +382,8 @@ module WakameOS
             :agent_id  => @agent_id,
             :alive     => @alive,
             :job_id    => @job_id,
-            :load      => self.load,
-            :instance  => @instance.to_hash,
+            :work      => self.work_time,
+            :instance  => (@instance || {}).to_hash,
             :create_on => @create_on.to_s,
             :update_on => @update_on.to_s,
           }
@@ -593,7 +593,7 @@ module WakameOS
           _agent_list_mutex(hash).synchronize {
             agents = _agents(hash)
             (agents.keys - @job_assign.keys).each do |agent_id|
-              waiting_agents << {:agent_id => agent_id, :load => agents[agent_id].load}
+              waiting_agents << {:agent_id => agent_id, :work => agents[agent_id].work_time}
             end
           }
         }

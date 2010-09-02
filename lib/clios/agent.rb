@@ -111,12 +111,21 @@ module WakameOS
               unless direct_data[:payload]==:queue_empty
                 # WE FIND A JOB!
                 @working = true
-                hash = ::Marshal.load(direct_data[:payload])
+                program = ::Marshal.load(direct_data[:payload])
                 direct_queue.delete
-                
-                code = hash[:code]
-                argv = hash[:argv]
+                code = ''
+                argv = nil
                 result = nil
+
+                p program
+
+                case program.class.name
+                when 'WakameOS::Utility::Job::RubyProc'
+                  code = program.body[:code]
+                  argv = program.body[:argv]
+                else
+                  result = UnknownProtocol.new("#{program.class.name} is not allow to execute.")
+                end
 
                 print "** Job arrival: #{code}\n"
                 thread = Thread.new {
@@ -181,6 +190,8 @@ module WakameOS
       }
     end
     protected :_credential
+
+    class UnknownProtocol < Exception; end
 
   end
 end
