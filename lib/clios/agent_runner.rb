@@ -12,7 +12,7 @@ module WakameOS
         puts 'Wakame-OS Agent (CLIOS - Cluster Level Infrastructure Operation System)'
         puts 'Copyright (C) Wakame Software Fundation.'
         
-        boot_token = "UNKNOWN.#{WakameOS::Util::UniqueKey.new}"
+        boot_token = "UNKNOWN.#{WakameOS::Utility::UniqueKey.new}"
         config = WakameOS::Configuration.default_server
         opts = OptionParser.new
         

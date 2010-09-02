@@ -1,7 +1,7 @@
 require 'md5'
 
 module WakameOS
-  module Util
+  module Utility
 
     # String
     module String
@@ -52,5 +52,5 @@ module WakameOS
 end
 
 class String
-  include WakameOS::Util::String
+  include WakameOS::Utility::String
 end
