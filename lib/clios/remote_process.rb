@@ -46,31 +46,44 @@ module WakameOS
           @instance = WakameOS::Client::SyncRpc.new('instance')
           @agent = WakameOS::Client::SyncRpc.new('agent')
         end
+
         def fork(*argv, &block)
-
           # TODO: Check the arity
-
           @mutex.synchronize {
-            queue_name = "ruby_code.#{WakameOS::Utility::UniqueKey.new}"
-            print "Making a code queue.\n"
-            queue = @amqp.queue(queue_name, :auto_delete => true)
-            queue.publish(::Marshal.dump(WakameOS::Utility::Job::RubyProc.new({
-                                                                                :code => WakameOS::Utility::ProcSerializer.dump({}, &block),
-                                                                                :argv => argv,
-                                                                              })))
-            print "Insert a job request into the queue.\n"
-            response = @agent.process_jobs(@credential, [queue_name], @spec_name)
-            print "Response: " + response.inspect + "\n"
-
-            queue_count = response[:queue_count] || 0
-            if response[:waiting_agents].size < queue_count
-              print "New instance is required.\n"
-              @instance.create_instances(@credential, @spec_name)
-            end
-            
-            print "done the forking request.\n"
+            _execute(WakameOS::Utility::Job::RubyProc.new({
+                                                            :code => WakameOS::Utility::ProcSerializer.dump({}, &block),
+                                                            :argv => argv,
+                                                          }))
           }
         end
+
+        def eval(ruby_code)
+          @mutex.synchronize {
+            _execute(WakameOS::Utility::Job::RubyPlainCode.new({
+                                                                 :code => ruby_code,
+                                                               }))
+          }
+        end
+        
+        def _execute(job)
+          queue_name = "#{job.class.name}.#{WakameOS::Utility::UniqueKey.new}"
+          print "Making a code queue.\n"
+          queue = @amqp.queue(queue_name, :auto_delete => true)
+          queue.publish(::Marshal.dump(job))
+          print "Insert a job request into the queue.\n"
+          response = @agent.process_jobs(@credential, [queue_name], @spec_name)
+          print "Response: " + response.inspect + "\n"
+          
+          queue_count = response[:queue_count] || 0
+          if response[:waiting_agents].size < queue_count
+            print "New instance is required.\n"
+            @instance.create_instances(@credential, @spec_name)
+          end
+          
+          print "done the forking request.\n"
+        end
+        protected :_execute
+
     end
       
     end

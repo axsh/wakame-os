@@ -37,7 +37,7 @@ module WakameOS
       @assigned             = false
 
       @heart_beat_interval  = 10
-      @job_picking_interval = 1
+      @job_picking_interval = 5
       @client_mutex         = Monitor.new
       @queue_name           = ''
 
@@ -116,32 +116,36 @@ module WakameOS
                 code = ''
                 argv = nil
                 result = nil
-
-                p program
+                must_call_function = false
 
                 case program.class.name
                 when 'WakameOS::Utility::Job::RubyProc'
                   code = program.body[:code]
                   argv = program.body[:argv]
+                  must_call_function = true
+                when 'WakameOS::Utility::Job::RubyPlainCode'
+                  code = program.body[:code]
                 else
                   result = UnknownProtocol.new("#{program.class.name} is not allow to execute.")
                 end
 
                 print "** Job arrival: #{code}\n"
                 thread = Thread.new {
-                  eval(code)
+                  result = eval(code)
 
                   # TODO: Check the arity
-                  begin
-                    if argv
-                      print "*** with argv: #{argv.inspect}\n"
-                      result = remote_task(*argv) 
-                    else
-                      result = remote_task
+                  if must_call_function
+                    begin
+                      if argv
+                        print "*** with argv: #{argv.inspect}\n"
+                        result = remote_task(*argv) 
+                      else
+                        result = remote_task
+                      end
+                    rescue => e
+                      print "Remote method raise an exception: #{e.inspect}\n"
+                      result = e
                     end
-                  rescue => e
-                    print "Remote method raise an exception: #{e.inspect}\n"
-                    result = e
                   end
 
                   # TODO: send response
