@@ -391,16 +391,19 @@ module WakameOS
       end
       
       class Job
-        attr_reader :job_id, :credential, :spec_name
-        def initialize(job_id,credential,  spec_name)
-          @job_id     = job_id
+        attr_reader :job, :credential, :spec_name
+        def initialize(job, credential,  spec_name)
+          @job        = job
           @credential = credential
           @spec_name  = spec_name
         end
         def to_hash
           {
-            :job_id => @job_id,
+            :job => @job,
           }
+        end
+        def name
+          "JOB.#{job.hash}"
         end
       end
       
@@ -567,8 +570,8 @@ module WakameOS
         @queue_name_prefix + spec_name + '.' + Digest::MD5.hexdigest(::Marshal.dump(credential))
       end
       
-      def process_jobs(credential, job_id_array, spec_name='default')
-        return false unless job_id_array.is_a?(Array) && job_id_array.size>0
+      def process_jobs(credential, job_array, spec_name='default')
+        return false unless job_array.is_a?(Array) && job_array.size>0
         
         # entry the jobs
         waiting_jobs = []
@@ -583,9 +586,10 @@ module WakameOS
                                                        :auto_delete => true,
                                                        :exclusive => false) unless queue
 
-          job_id_array.each do |job_id|
-            queue.publish(::Marshal.dump(Job.new(job_id, credential, spec_name)))
-            waiting_jobs << job_id
+          job_array.each do |job|
+            job_package = Job.new(job, credential, spec_name)
+            queue.publish(::Marshal.dump(job_package))
+            waiting_jobs << job_package.name
           end
           queue_count = queue.message_count
 

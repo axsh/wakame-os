@@ -86,7 +86,9 @@ module WakameOS
         thread_queue = Queue.new
 
         loop_flag = true
+        request_count = 0
         begin
+          request_count += 1
           print "Waiting a job...\n"
           data = queue.pop
           print "Agent ID: #{@agent_id} picked a job up from #{@queue_name} ... #{data.inspect}\n"
@@ -98,12 +100,12 @@ module WakameOS
             print "** A job will come from #{job.inspect}\n"
 
             @client_mutex.synchronize {
-              @assigned = true if @client.assign_job(_credential, job.job_id)
+              @assigned = true if @client.assign_job(_credential, job.name)
             }
 
             # job.credential
             # job.spec_name
-            direct_queue = bunny.queue(job.job_id, :auto_delete => true)
+            direct_queue = bunny.queue(job.job[:request], :auto_delete => true)
             counter = 10
             begin
               print "Waiting a receiving code...\n"
@@ -149,14 +151,16 @@ module WakameOS
                   end
 
                   # TODO: send response
-
+                  response_queue = bunny.queue(job.job[:response], :auto_delete => true)
+                  response_queue.publish(::Marshal.dump(result))
+                  
                   @client_mutex.synchronize {
-                    @assigned = false if @client.finish_job(_credential, job.job_id)
+                    @assigned = false if @client.finish_job(_credential, job.name)
                   }
                   
                 }
                 thread.join
-
+                request_count = 0
                 break
               else
                 sleep(@job_picking_interval)
@@ -167,7 +171,11 @@ module WakameOS
             print "Exit, try to find a next job.\n"
           end
           @working = false
-          sleep(@job_picking_interval)
+          if request_count > 10
+            sleep(@job_picking_interval)
+          else
+            sleep 0.1
+          end
         end while loop_flag
       }
 
