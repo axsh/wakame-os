@@ -7,7 +7,7 @@ h2. Example: Running a remote code
 <pre>
 <code>
   require 'wakame'
-  process = WakameOS::Process.setup(:credential => {:user => 'your_name'})
+  process = Wakame::Process.setup(:credential => {:user => 'your_name'})
   
   process.fork {
     print "Running code on the remote!\n"
@@ -22,7 +22,7 @@ h2. Example: Launch a new instance
   require 'wakame'
   credential = {:user => 'your_name'}
   
-  instance = WakameOS::Client::SyncRpc('instance')
+  instance = Wakame::SyncRpc('instance')
   instance.create_instances(credential)
 </code>
 </pre>
@@ -61,7 +61,7 @@ h3. instance_sample.rb
   require 'wakame'
   credential = {:user => 'your_name'}
   
-  instance = WakameOS::Client::SyncRpc('instance')
+  instance = Wakame::SyncRpc('instance')
   instance.create_instances(credential, 'aws_fedora_core_8')
 </code>
 </pre>
@@ -71,8 +71,8 @@ h3. fork_sample.rb
 <pre>
 <code>
   require 'wakame'
-  process = WakameOS::Process.setup(:credential => {:user => 'your_name'},
-                                    :spec_name => 'aws_fedora_core_8')
+  process = Wakame::Process.setup(:credential => {:user => 'your_name'},
+                                  :spec_name => 'aws_fedora_core_8')
   
   process.fork {
     print "Running code on the remote fedora core 8!\n"
