@@ -12,12 +12,13 @@ require 'monitor'
 module WakameOS
   module Client
     class AsyncRpc
+      include Logger
+
       def initialize(queue_name, mq=nil)
         @callbacks = {}
         @mq = mq || MQ.new
         @remote = mq.queue(queue_name)
 
-        # TODO: make it unique
         @name = "Wakame-AsyncRpc-Response-ID.#{WakameOS::Utility::UniqueKey.new}"
         response = @mq.queue(@name, :auto_delete => true).subscribe{|info, msg|
           if callback = @callbacks.delete(info.message_id)
@@ -29,8 +30,6 @@ module WakameOS
       end
 
       def method_missing(method, *args, &blk)
-        # TODO: How to make sync with return
-        # TODO: make it unique
         message_id = "random message id #{WakameOS::Utility::UniqueKey.new}"
         @monitor.synchronize {
           @callbacks[message_id] = blk if blk
@@ -41,6 +40,8 @@ module WakameOS
     end
 
     class SyncRpc
+      include Logger
+
       def initialize(queue_name)
         
         # @amqp = Carrot.new()

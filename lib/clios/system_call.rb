@@ -28,6 +28,7 @@ module WakameOS
     #####################################################################
     # Instance
     class InstanceController
+      include Logger
 
       class HybridInstance
         include Privilege
@@ -224,7 +225,7 @@ module WakameOS
             begin
               sleep(@patrol_interval_sec || 5)
 
-              print "Instance stats checking...\n"
+              logger.info "Instance stats checking..."
               online_instances = []
               onmemory_instances = []
               iaas_has_any_trouble = false
@@ -241,11 +242,11 @@ module WakameOS
                   end
                 rescue => e
                   # TODO: identify the exception
-                  print "Does IaaS have any trouble? Instance list not found via driver \"#{driver_name}.\"\n"
+                  logger.warn "Does IaaS have any trouble? Instance list not found via driver \"#{driver_name}.\""
                   iaas_has_any_trouble = true
                 end
 
-                print "running gabage collector...\n"
+                logger.info "running gabage collector..."
                 now = DateTime.now
                 mark_to_delete = []
                 @instances.each do |key, instance|
@@ -263,30 +264,30 @@ module WakameOS
                 end
 
                 unless iaas_has_any_trouble
-                  print "checking invisible instance with unpredictable reason...\n"
-                  p onmemory_instances.inspect
-                  p online_instances.inspect
+                  logger.info "checking invisible instance with unpredictable reason..."
+                  # p onmemory_instances.inspect
+                  # p online_instances.inspect
                   (onmemory_instances - online_instances).each do |global_name|
-                    print "Gone Instance? > #{global_name}\n"
+                    logger.warn "Gone Instance? > #{global_name}"
                     @instances[global_name].state = "accidental"
                   end
                 end
 
-                print "delete from memory...\n"
+                logger.info "delete from memory..."
                 mark_to_delete.each do |key|
                   instance = @instances.delete(key)
                   @instances_by_boot_token.delete(instance.boot_token)
                   instance.destroy if instance
                 end
 
-                print "destroy from server farm...\n"
+                logger.info "destroy from server farm..."
                 carry_forward = []
                 mark_to_destroy.each do |credential, instance_name|
                   begin
                     destroy_instances(credential, [instance_name])
                   rescue => e
                     # TODO: identify the exception
-                    print "Failure to destroy? #{instance_name} Exception: #{e.inspect}\n"
+                    logger.warn "Failure to destroy? #{instance_name} Exception: #{e.inspect}"
                     carry_forward << [credential, instance_name]
                   end
                 end
@@ -304,9 +305,9 @@ module WakameOS
                   chance_to_retry = 5
                 end
               }
-              print "Instance stats updated.\n"
+              logger.info "Instance stats updated."
             end while loop_flag
-            print "Patrol thread is finished working.\n"
+            logger.info "Patrol thread is finished working."
           end
         end
       end
@@ -319,6 +320,7 @@ module WakameOS
     #####################################################################
     # Agent
     class AgentController
+      include Logger
       class Agent
         include Privilege
 
@@ -654,7 +656,7 @@ module WakameOS
             loop_flag = true
             begin
               sleep(@patrol_interval_sec || 10)
-              print "Checking agents...\n"
+              logger.info "Checking agents..."
               mark_to_delete = []
               _agent_list_mutex(hash).synchronize {
                 _agents(hash).each do |agent_id, agent|
@@ -662,7 +664,7 @@ module WakameOS
                 end
                 mark_to_delete.each do |agent_id|
                   agent = _agents(hash).delete(agent_id)
-                  print "Agent ID: #{agent_id} is gone.\n"
+                  logger.info "Agent ID: #{agent_id} is gone."
                   agent.destroy
                 end
               }

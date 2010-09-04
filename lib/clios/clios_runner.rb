@@ -8,15 +8,15 @@ module WakameOS
     
     class Clios
       def self.start(*argv)
-        puts 'Wakame-OS (CLIOS - Cluster Level Infrastructure Operation System)'
-        puts 'Copyright (C) Wakame Software Fundation.'
+        print "Wakame-OS (CLIOS - Cluster Level Infrastructure Operation System)\n"
+        print "Copyright (C) Wakame Software Fundation.\n"
         
         config = WakameOS::Configuration.default_server
         opts = OptionParser.new
         
         # Options
         opts.on( '-v', '--version' ) {
-          puts 'Version ' + WakameOS::VERSION.to_s
+          print "Version #{WakameOS::VERSION.to_s}\n"
           config[:require_exit] = true
         }
         opts.on( '-X', '--undaemonize' ) {

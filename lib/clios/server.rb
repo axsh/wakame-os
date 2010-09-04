@@ -1,4 +1,6 @@
 #
+require 'clios'
+
 require 'rubygems'
 require 'eventmachine'
 require 'amqp'
@@ -6,6 +8,7 @@ require 'amqp'
 #
 module WakameOS
   class Server
+    include Logger
 
     def self.start(config, context)
       self.new.start(config, context)
@@ -17,7 +20,7 @@ module WakameOS
 
       Signal.trap(:INT) {
         # TODO: flush every thing.
-        puts 'Done.'
+        logger.info "Shutting down..."
         exit(1)
       }
 
@@ -26,12 +29,12 @@ module WakameOS
         mq ||= MQ.new
 
         context.rpc_procs.each { |name, proc_object, blk|
-          puts 'Register: "' + name.to_s + '" as proc.'
+          logger.info "Register: \"#{name.to_s}\" as proc."
           blk.call(mq, name, proc_object)
         }
 
         context.rpc_classes.each { |name, klass, blk|
-          puts 'Register: "' + name.to_s + '" as ' + klass.class.name.to_s
+          logger.info "Register: \"#{name.to_s}\" as #{klass.class.name.to_s}"
           blk.call(mq, name, klass)
         }
 

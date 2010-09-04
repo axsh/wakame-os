@@ -13,8 +13,7 @@ require 'bunny'
 module WakameOS
   class Agent
 
-    class AgentBehavior
-    end
+    include Logger
 
     #####################################################################
     # Member
@@ -41,10 +40,6 @@ module WakameOS
       @client_mutex         = Monitor.new
       @queue_name           = ''
 
-      agent_behavior = AgentBehavior.new
-      
-      # Entry Service
-      rpc "agent_behavior.#{boot_token}", agent_behavior
       credential = {:boot_token => boot_token}
 
       # Negotiation
@@ -56,11 +51,12 @@ module WakameOS
         @spec_name  = result[:spec_name ]
         @queue_name = result[:queue_name]
       end
-      print "Entry: #{results.inspect}\n"
+      logger.info "Entry: #{results.inspect}"
       
       # Finalization
       [:EXIT, :TERM, :HUP].each do |sig|
         Signal.trap(sig){
+          logger.info "Shutting down..."
           self.destroy
           exit(0)
         }
@@ -79,7 +75,7 @@ module WakameOS
       @job_picker = Thread.new {
         queue = nil
 
-        print "Job picker setup.\n"
+        logger.info "Job picker setup."
         bunny = Bunny.new(:spec => '08') # configure from command line option
         bunny.start
         queue = bunny.queue(@queue_name, :auto_delete => true, :exclusive => false)
@@ -89,15 +85,15 @@ module WakameOS
         request_count = 0
         begin
           request_count += 1
-          print "Waiting a job...\n"
+          logger.info "Waiting a job..."
           data = queue.pop
-          print "Agent ID: #{@agent_id} picked a job up from #{@queue_name} ... #{data.inspect}\n"
+          logger.info "Agent ID: #{@agent_id} picked a job up from #{@queue_name} ... #{data.inspect}"
           unless data[:payload]==:queue_empty
             # WE GOT A JOB REQUEST
             touch
 
             job = ::Marshal.load(data[:payload])
-            print "** A job will come from #{job.inspect}\n"
+            logger.info "** A job will come from #{job.inspect}"
 
             @client_mutex.synchronize {
               @assigned = true if @client.assign_job(_credential, job.name)
@@ -108,7 +104,7 @@ module WakameOS
             direct_queue = bunny.queue(job.job[:request], :auto_delete => true)
             counter = 10
             begin
-              print "Waiting a receiving code...\n"
+              logger.info "Waiting a receiving code..."
               direct_data = direct_queue.pop
               unless direct_data[:payload]==:queue_empty
                 # WE FIND A JOB!
@@ -131,7 +127,7 @@ module WakameOS
                   result = UnknownProtocol.new("#{program.class.name} is not allow to execute.")
                 end
 
-                print "** Job arrival: #{code}\n"
+                logger.info "** Job arrival: #{code}"
                 thread = Thread.new {
                   result = eval(code)
 
@@ -139,13 +135,13 @@ module WakameOS
                   if must_call_function
                     begin
                       if argv
-                        print "*** with argv: #{argv.inspect}\n"
+                        logger.info "*** with argv: #{argv.inspect}"
                         result = remote_task(*argv) 
                       else
                         result = remote_task
                       end
                     rescue => e
-                      print "Remote method raise an exception: #{e.inspect}\n"
+                      logger.info "Remote method raise an exception: #{e.inspect}"
                       result = e
                     end
                   end
@@ -161,14 +157,14 @@ module WakameOS
               else
                 sleep(@job_picking_interval)
                 counter -= 1
-                print "No any job. Retry counter is #{counter}.\n"
+                logger.info "No any job. Retry counter is #{counter}."
               end
             end while counter>0
 
             @client_mutex.synchronize {
               @assigned = false if @client.finish_job(_credential, job.name)
             }
-            print "Exit, try to find a next job.\n"
+            logger.info "Exit, try to find a next job."
           end
           @working = false
 

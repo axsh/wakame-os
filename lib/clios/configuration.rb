@@ -1,9 +1,11 @@
 #
+require 'clios'
 require 'ostruct'
 
 #
 module WakameOS
   class Configuration
+    include Logger
 
     def self.default_server
       {

@@ -1,4 +1,6 @@
 #
+require 'clios'
+
 require 'rubygems'
 require 'mq'
 
@@ -22,6 +24,7 @@ module WakameOS
     end
 
     module Kernel
+
       def context
         $wakame_context ||= Context.new
       end
@@ -34,7 +37,7 @@ module WakameOS
             info.ack
             Thread.start {
               method, *args = ::Marshal.load(request)
-              puts "* Got RPC request: "+method.to_s+" on "+name.to_s
+              # print "* Got RPC request: #{method.to_s} on #{name.to_s}\n"
               # TODO: error check for arity
               ret = blk.call(method, *args)
               mq.queue(info.reply_to, :auto_delete => true).publish(::Marshal.dump(ret), :key => info.reply_to, :message_id => info.message_id) if info.reply_to
@@ -48,7 +51,7 @@ module WakameOS
             info.ack
             EM.defer {
               method, *args = ::Marshal.load(request)
-              puts "* Got RPC request: "+method.to_s+" on "+name.to_s
+              # print "* Got RPC request: #{method.to_s} on #{name.to_s}\n"
               begin
                 # TODO: error check for arity
                 ret = klass.send(method, *args)
@@ -62,14 +65,6 @@ module WakameOS
           }
         } if klass
 
-      end
-
-      class RpcThread < Thread
-        attr_reader :value
-        def initialize(object_mapper={}, &blk)
-          @value = object_mapper
-          super(&blk)
-        end
       end
 
     end

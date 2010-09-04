@@ -13,6 +13,8 @@ module WakameOS
 
   VERSION = '0.1'
 
+  autoload :Logger, 'clios/logger'
+
   autoload :Configuration, 'clios/configuration'
   autoload :Agent, 'clios/agent'
   autoload :Server, 'clios/server'

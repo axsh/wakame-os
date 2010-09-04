@@ -8,9 +8,10 @@ module WakameOS
   module Runner
     
     class Agent
+      include Logger
       def self.start(*argv)
-        puts 'Wakame-OS Agent (CLIOS - Cluster Level Infrastructure Operation System)'
-        puts 'Copyright (C) Wakame Software Fundation.'
+        print "Wakame-OS Agent (CLIOS - Cluster Level Infrastructure Operation System)\n"
+        print "Copyright (C) Wakame Software Fundation.\n"
         
         boot_token = "UNKNOWN.#{WakameOS::Utility::UniqueKey.new}"
         config = WakameOS::Configuration.default_server
@@ -18,7 +19,7 @@ module WakameOS
         
         # Options
         opts.on('-v', '--version'){
-          puts 'Version ' + WakameOS::VERSION.to_s
+          print "Version #{WakameOS::VERSION.to_s}\n"
           config[:require_exit] = true
         }
         opts.on('-X', '--undaemonize'){
@@ -34,7 +35,7 @@ module WakameOS
         exit(1) if config[:require_exit]
         # Process.daemon if Process.respond_to?(:daemon) && !config[:daemonize]
         
-        puts 'Token(boot_token or global_name) = "'+boot_token.to_s+'"'
+        logger.info "Token(boot_token or global_name) = \"#{boot_token.to_s}\""
         
         server = WakameOS::Server.new
         agent = WakameOS::Agent.new(boot_token)

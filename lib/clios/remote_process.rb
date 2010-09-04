@@ -1,4 +1,5 @@
 require 'rubygems'
+require 'clios'
 require 'util'
 
 require 'thread'
@@ -36,6 +37,7 @@ module WakameOS
       end
       
       class Remote
+        include Logger
         attr_accessor :credential, :spec_name, :option
         def initialize(option)
           # @amqp = Carrot.new(option)
@@ -83,38 +85,38 @@ module WakameOS
         def _execute(job, need_response=false)
           result = nil
 
-          print "Making a code queue.\n"
+          logger.info "Making a code queue."
           request_queue_name  = "#{job.class.name}.Request-#{WakameOS::Utility::UniqueKey.new}"
           request_queue  = @amqp.queue(request_queue_name,  :auto_delete => true)
           response_queue_name = "#{job.class.name}.Response-#{WakameOS::Utility::UniqueKey.new}"
           response_queue = @amqp.queue(response_queue_name, :auto_delete => true)
 
           request_queue.publish(::Marshal.dump(job))
-          print "Insert a job request into the queue.\n"
+          logger.info "Insert a job request into the queue."
           response = @agent.process_jobs(@credential,
                                          [{:request => request_queue_name, :response => response_queue_name}],
                                          @spec_name)
-          print "Response: " + response.inspect + "\n"
+          logger.info "Response: " + response.inspect
           
           queue_count = response[:queue_count] || 0
           if response[:waiting_agents].size < queue_count
-            print "New instance is required.\n"
+            logger.info "New instance is required."
             @instance.create_instances(@credential, @spec_name)
           end
-          print "done the request.\n"
+          logger.info "done the request."
           
           if need_response
             item = nil
             need_loop = true
             begin 
               item = response_queue.pop
-              print "RESPONSE (MARSHAL): " + item.inspect + "\n"
+              logger.info "RESPONSE (MARSHAL): " + item.inspect + ""
               if need_loop = (item[:payload]==:queue_empty)
                 sleep 0.5 # TODO: lazy wait
               end
             end while need_loop
             result = ::Marshal.load(item[:payload])
-            print "RESPONSE #{response_queue_name} (OBJECT): " + result.inspect + "\n"
+            logger.info "RESPONSE #{response_queue_name} (OBJECT): " + result.inspect
           end
           response_queue.delete
 
