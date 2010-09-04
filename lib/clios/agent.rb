@@ -154,10 +154,6 @@ module WakameOS
                   response_queue = bunny.queue(job.job[:response], :auto_delete => true)
                   response_queue.publish(::Marshal.dump(result))
                   
-                  @client_mutex.synchronize {
-                    @assigned = false if @client.finish_job(_credential, job.name)
-                  }
-                  
                 }
                 thread.join
                 request_count = 0
@@ -168,13 +164,19 @@ module WakameOS
                 print "No any job. Retry counter is #{counter}.\n"
               end
             end while counter>0
+
+            @client_mutex.synchronize {
+              @assigned = false if @client.finish_job(_credential, job.name)
+            }
             print "Exit, try to find a next job.\n"
           end
           @working = false
-          if request_count > 10
+
+          # Calibration of waiting...
+          if request_count > 10 # TODO: Lazy magic number
             sleep(@job_picking_interval)
           else
-            sleep 0.1
+            sleep 0.1 # TODO: Lazy magic number
           end
         end while loop_flag
       }
