@@ -17,9 +17,9 @@ module WakameOS
       def initialize(queue_name, mq=nil)
         @callbacks = {}
         @mq = mq || MQ.new
-        @remote = mq.queue(queue_name)
+        @remote = mq.queue('wakame.rpc.'+queue_name)
 
-        @name = "Wakame-AsyncRpc-Response-ID.#{WakameOS::Utility::UniqueKey.new}"
+        @name = "wakame.client.response-#{WakameOS::Utility::UniqueKey.new}"
         response = @mq.queue(@name, :auto_delete => true).subscribe{|info, msg|
           if callback = @callbacks.delete(info.message_id)
             callback.call ::Marshal.load(msg)
@@ -30,7 +30,7 @@ module WakameOS
       end
 
       def method_missing(method, *args, &blk)
-        message_id = "random message id #{WakameOS::Utility::UniqueKey.new}"
+        message_id = WakameOS::Utility::UniqueKey.new
         @monitor.synchronize {
           @callbacks[message_id] = blk if blk
           @remote.publish(::Marshal.dump([method, *args]), :reply_to => blk ? @name : nil, :message_id => message_id)
@@ -45,23 +45,23 @@ module WakameOS
       def initialize(queue_name)
         
         # @amqp = Carrot.new()
-        @amqp = Bunny.new(:spec => '08')
+        @amqp = Bunny.new(:spec => '08') # TODO: to connect to other server
         @amqp.start
 
         @rabbit_mutex = Monitor.new
         @queue_monitor = Monitor.new
 
-        @remote = @amqp.queue(queue_name, :auto_delete => true)
+        @remote = @amqp.queue('wakame.rpc.'+queue_name, :auto_delete => true)
 
       end
 
       def method_missing(method, *args, &blk)
         response = nil
-        response_id = "Wakame-SyncRpc-Response-ID.#{WakameOS::Utility::UniqueKey.new}"
+        response_id = "wakame.client.response-#{WakameOS::Utility::UniqueKey.new}"
         @rabbit_mutex.synchronize {
           response = @amqp.queue(response_id, :auto_delete => true)
         }
-        message_id = "random message id #{WakameOS::Utility::UniqueKey.new}"
+        message_id = WakameOS::Utility::UniqueKey.new
         @queue_monitor.synchronize {
           @remote.publish(::Marshal.dump([method, *args]), :reply_to => response_id, :message_id => message_id)
         }

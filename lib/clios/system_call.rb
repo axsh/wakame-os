@@ -428,7 +428,7 @@ module WakameOS
             @@amqp.start
           end
         }
-        @queue_name_prefix = 'job_spec.'
+        @queue_name_prefix = 'wakame.job.spec.'
         @job_queue_hash = {}
         @agents = {}
         @agent_list_mutex = {}

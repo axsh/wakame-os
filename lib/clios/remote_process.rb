@@ -86,10 +86,13 @@ module WakameOS
           result = nil
 
           logger.info "Making a code queue."
-          request_queue_name  = "#{job.class.name}.Request-#{WakameOS::Utility::UniqueKey.new}"
+          request_queue_name  = "wakame.remote.request-#{WakameOS::Utility::UniqueKey.new}"
           request_queue  = @amqp.queue(request_queue_name,  :auto_delete => true)
-          response_queue_name = "#{job.class.name}.Response-#{WakameOS::Utility::UniqueKey.new}"
-          response_queue = @amqp.queue(response_queue_name, :auto_delete => true)
+          response_queue_name = nil
+          if need_response
+            response_queue_name = "wakame.remote.response-#{WakameOS::Utility::UniqueKey.new}"
+            response_queue = @amqp.queue(response_queue_name, :auto_delete => true)
+          end
 
           request_queue.publish(::Marshal.dump(job))
           logger.info "Insert a job request into the queue."
@@ -110,15 +113,15 @@ module WakameOS
             need_loop = true
             begin 
               item = response_queue.pop
-              logger.info "RESPONSE (MARSHAL): " + item.inspect + ""
+              logger.info "RESPONSE (MARSHAL): " + item.inspect
               if need_loop = (item[:payload]==:queue_empty)
                 sleep 0.5 # TODO: lazy wait
               end
             end while need_loop
             result = ::Marshal.load(item[:payload])
             logger.info "RESPONSE #{response_queue_name} (OBJECT): " + result.inspect
+            response_queue.delete
           end
-          response_queue.delete
 
           result
         end

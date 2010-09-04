@@ -146,10 +146,10 @@ module WakameOS
                     end
                   end
 
-                  # TODO: send response
-                  response_queue = bunny.queue(job.job[:response], :auto_delete => true)
-                  response_queue.publish(::Marshal.dump(result))
-                  
+                  if job.job[:response]
+                    response_queue = bunny.queue(job.job[:response], :auto_delete => true)
+                    response_queue.publish(::Marshal.dump(result))
+                  end
                 }
                 thread.join
                 request_count = 0

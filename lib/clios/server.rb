@@ -29,13 +29,13 @@ module WakameOS
         mq ||= MQ.new
 
         context.rpc_procs.each { |name, proc_object, blk|
-          logger.info "Register: \"#{name.to_s}\" as proc."
-          blk.call(mq, name, proc_object)
+          logger.info "Register: \"wakame.rpc.#{name.to_s}\" as proc."
+          blk.call(mq, 'wakame.rpc.'+name, proc_object)
         }
 
         context.rpc_classes.each { |name, klass, blk|
-          logger.info "Register: \"#{name.to_s}\" as #{klass.class.name.to_s}"
-          blk.call(mq, name, klass)
+          logger.info "Register: \"wakame.rpc.#{name.to_s}\" as #{klass.class.name.to_s}"
+          blk.call(mq, 'wakame.rpc.'+name, klass)
         }
 
       }
