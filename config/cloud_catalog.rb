@@ -49,8 +49,8 @@ WakameOS::Configuration.cloud_catalog do |cc|
     s.driver = 'permanent_host'
     s.life_circle_pattern = :permanent
     s.life_time do |lt|
-      lt.running    = 15
-      lt.terminated = 15
+      lt.running    = 60
+      lt.terminated = 30
     end
   end
 
