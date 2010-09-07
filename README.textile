@@ -114,7 +114,7 @@ h2. Example: PI calc
         y = rand
         hit += 1 if x*x+y*y<1.0
       }
-      queue.push [no, Rational(hit, total)]
+      queue.push [no, Rational(hit, challange)]
     }
   }
   
