@@ -109,7 +109,7 @@ h2. Example: PI calc
     process.fork(no, challange, queue) { |no, challange, queue|
       hit  = 0
   
-      total.times {
+      challange.times {
         x = rand
         y = rand
         hit += 1 if x*x+y*y<1.0
