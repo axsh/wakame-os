@@ -129,16 +129,18 @@ module WakameOS
 
                 logger.info "** Job arrival: #{code}"
                 thread = Thread.new {
-                  result = eval(code)
+
+                  c = Class.new
+                  c.instance_eval(code)
 
                   # TODO: Check the arity
                   if must_call_function
                     begin
                       if argv
                         logger.info "*** with argv: #{argv.inspect}"
-                        result = remote_task(*argv) 
+                        result = c.remote_task(*argv) 
                       else
-                        result = remote_task
+                        result = c.remote_task
                       end
                     rescue => e
                       logger.info "Remote method raise an exception: #{e.inspect}"
