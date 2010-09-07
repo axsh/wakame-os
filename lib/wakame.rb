@@ -7,14 +7,6 @@
 require 'rubygems'
 require 'clios'
 
-module WakameOS
-  module Client
-    autoload :SystemCall, 'wakame/client/system_call'
-    autoload :AsyncRpc, 'clios/client'
-    autoload :SyncRpc, 'clios/client'
-  end
-end
-
 module Wakame
   include WakameOS::Client
 end

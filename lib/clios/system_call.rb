@@ -2,6 +2,7 @@
 #
 require 'clios'
 require 'cloud'
+require 'util'
 
 require 'md5'
 require 'date'
@@ -398,21 +399,22 @@ module WakameOS
           @job        = job
           @credential = credential
           @spec_name  = spec_name
+          @job_id     = WakameOS::Utility::UniqueKey.new
         end
         def to_hash
           {
+            :job_id => @job_id,
             :job => @job,
           }
         end
         def name
-          "JOB.#{job.hash}"
+          "#{@job_id}"
         end
       end
       
       ##################################################################
       
-      @@amqp = nil
-      @@rabbit_mutex = Monitor.new
+      @@amqp_mutex = Monitor.new
       
       attr_reader :instance_controller
       attr_reader :agents, :agent_list_mutex, :agents_index
@@ -421,15 +423,7 @@ module WakameOS
       def initialize(instance_controller)
         @instance_controller = instance_controller
         
-        @@rabbit_mutex.synchronize {
-          unless @@amqp
-            # @@amqp = Carrot.new({}) # TODO: support connection to other host
-            @@amqp = Bunny.new(:spec => '08') # TODO: support connection to other host
-            @@amqp.start
-          end
-        }
         @queue_name_prefix = 'wakame.job.spec.'
-        @job_queue_hash = {}
         @agents = {}
         @agent_list_mutex = {}
         @agents_index = {}
@@ -444,26 +438,33 @@ module WakameOS
       ##################################
       # Instance method / Operaion layer
 
-      # Agent (Waiting worker) Registration
-      def list_agents(credential=nil) # user credential
+      def list_jobs(user_credential=nil)
+        list_agents(user_credential, true)
+      end
+
+      def list_agents(user_credential=nil, has_job=false)
         ret = []
-        if credential
-          hash = _user_credential_hash(credential)
+        if user_credential
+          hash = _user_credential_hash(user_credential)
           _agent_list_mutex(hash).synchronize {
             _agents(hash).values.each do |agent|
-              ret.push(agent.to_hash) if agent.allow?(credential)
+              ret.push(agent.to_hash) if 
+                agent.allow?(user_credential) && 
+                ((has_job && agent.job_id) || !has_job)
             end
           }
         else
           @agents_index_mutex.synchronize {
             @agents_index.values.each do |agent|
-              ret.push(agent.to_hash)
+              ret.push(agent.to_hash) if
+                (has_job && agent.job_id) || !has_job
             end
           }
         end
         ret
       end
 
+      # Agent (Waiting worker) Registration
       # Notes: this credential is for to identify the agent, not user!
       def entry_agents(credential_array)
         ret = []
@@ -582,11 +583,13 @@ module WakameOS
 
         queue = nil
         name = queue_name(credential, spec_name)
-        @@rabbit_mutex.synchronize {
-          queue = @job_queue_hash[name]
-          queue = @job_queue_hash[name] = @@amqp.queue(name,
-                                                       :auto_delete => true,
-                                                       :exclusive => false) unless queue
+        @@amqp_mutex.synchronize {
+          amqp = Bunny.new(:spec => '08') # TODO: support connection to other host
+          amqp.start
+
+          queue = amqp.queue(name,
+                             :auto_delete => true,
+                             :exclusive => false) unless queue
 
           job_array.each do |job|
             job_package = Job.new(job, credential, spec_name)
@@ -602,6 +605,7 @@ module WakameOS
               waiting_agents << {:agent_id => agent_id, :work => agents[agent_id].work_time}
             end
           }
+          amqp.stop
         }
 
         {:waiting_jobs => waiting_jobs, :waiting_agents => waiting_agents, :queue_count => queue_count || waiting_agents.size}
@@ -610,12 +614,13 @@ module WakameOS
       # Pop a job (use a user credential)
       def pop_job(credential, spec_name='default')
         ret = :queue_empty
-        if queue = @job_queue_hash[queue_name(credential, spec_name)]
-          @@rabbit_mutex.synchronize {
-            ret = queue.pop
-          }
-          ret = ::Marshal.load(ret) if ret && (ret = ret[:payload])!=:queue_empty
-        end
+        @@amqp_mutex.synchronize {
+          amqp = Bunny.new(:spec => '08') # TODO: support connection to other host
+          amqp.start
+          ret = queue.pop.dup
+          amqp.stop
+        }
+        ret = ::Marshal.load(ret) if ret && (ret = ret[:payload])!=:queue_empty
         ret
       end
       
@@ -666,6 +671,9 @@ module WakameOS
                   agent = _agents(hash).delete(agent_id)
                   logger.info "Agent ID: #{agent_id} is gone."
                   agent.destroy
+                  @agents_index_mutex.synchronize {
+                    @agents_index.delete(agent_id)
+                  }
                 end
               }
             end while loop_flag

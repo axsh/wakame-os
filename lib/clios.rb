@@ -16,10 +16,10 @@ module WakameOS
   autoload :Logger, 'clios/logger'
 
   autoload :Configuration, 'clios/configuration'
-  autoload :Agent, 'clios/agent'
-  autoload :Server, 'clios/server'
-  autoload :Service, 'clios/service'
-  autoload :SystemCall, 'clios/system_call'
+  autoload :Agent,         'clios/agent'
+  autoload :Server,        'clios/server'
+  autoload :Service,       'clios/service'
+  autoload :SystemCall,    'clios/system_call'
   
   module Runner
     autoload :Clios, 'clios/clios_runner'
@@ -27,9 +27,12 @@ module WakameOS
   end
 
   module Client
-    autoload :AsyncRpc, 'clios/client'
-    autoload :SyncRpc, 'clios/client'
-    autoload :Process, 'clios/remote_process'
+    autoload :SetupBase, 'clios/remote'
+    autoload :AsyncRpc,  'clios/client'
+    autoload :SyncRpc,   'clios/client'
+    autoload :Process,   'clios/remote_process'
+    autoload :Queue,     'clios/remote_queue'
+    autoload :SystemCall, 'wakame/client/system_call'
   end
 
   module Utility

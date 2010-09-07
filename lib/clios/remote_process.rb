@@ -10,25 +10,13 @@ require 'bunny'
 
 module WakameOS
   module Client
-    class Process
-      @@credential = {}
-      @@spec_name  = 'default'
-      @@option     = {}
-      
-      def self.credential;              @@credential;                  end
-      def self.credential=(credential); @@credential = credential.dup; end
-      def self.spec_name;               @@spec_name;                   end
-      def self.spec_name=(spec_name);   @@spec_name = spec_name.dup;   end
-      
+    class Process < SetupBase
+
       def self.setup(option={})
-        credential = option.delete(:credential) || @@credential
-        spec_name  = option.delete(:spec_name)  || @@spec_name  || 'default'
-        
-        option = option.dup.merge({:spec => '08'})
-        remote = Remote.new(option)
-        @@credential = remote.credential = credential.dup
-        @@spec_name  = remote.spec_name  = spec_name.dup
-        @@option     = remote.option     = option
+        hash              = super(option)
+        remote            = Remote.new(option)
+        remote.credential = hash[:credential]
+        remote.spec_name  = hash[:spec_name]
         return remote
       end
       
@@ -40,13 +28,10 @@ module WakameOS
         include Logger
         attr_accessor :credential, :spec_name, :option
         def initialize(option)
-          # @amqp = Carrot.new(option)
-          @amqp = Bunny.new(option)
-          @amqp.start
-
           @mutex = Monitor.new
           @instance = WakameOS::Client::SyncRpc.new('instance')
           @agent = WakameOS::Client::SyncRpc.new('agent')
+          @option = option
         end
 
         def fork(*argv, &block)
@@ -85,14 +70,17 @@ module WakameOS
         def _execute(job, need_response=false)
           result = nil
 
+          amqp = Bunny.new(option)
+          amqp.start
+
+          gc_targets = []
           logger.info "Making a code queue."
-          request_queue_name  = "wakame.remote.request-#{WakameOS::Utility::UniqueKey.new}"
-          request_queue  = @amqp.queue(request_queue_name,  :auto_delete => true)
           response_queue_name = nil
-          if need_response
-            response_queue_name = "wakame.remote.response-#{WakameOS::Utility::UniqueKey.new}"
-            response_queue = @amqp.queue(response_queue_name, :auto_delete => true)
-          end
+          gc_targets << request_queue_name  = "wakame.remote.request-#{WakameOS::Utility::UniqueKey.new}"
+          gc_targets << response_queue_name = "wakame.remote.response-#{WakameOS::Utility::UniqueKey.new}" if need_response
+          WakameOS::Client::SystemCall.instance.add_gc_target_queues(gc_targets)
+          request_queue  = amqp.queue(request_queue_name,  :auto_delete => true)
+          response_queue = amqp.queue(response_queue_name, :auto_delete => true) if need_response
 
           request_queue.publish(::Marshal.dump(job))
           logger.info "Insert a job request into the queue."
@@ -123,6 +111,8 @@ module WakameOS
             response_queue.delete
           end
 
+          WakameOS::Client::SystemCall.instance.remove_gc_target_queues(gc_targets)
+          amqp.stop
           result
         end
         protected :_execute

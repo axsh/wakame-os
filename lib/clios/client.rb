@@ -43,27 +43,25 @@ module WakameOS
       include Logger
 
       def initialize(queue_name)
-        
-        # @amqp = Carrot.new()
-        @amqp = Bunny.new(:spec => '08') # TODO: to connect to other server
-        @amqp.start
-
         @rabbit_mutex = Monitor.new
         @queue_monitor = Monitor.new
-
-        @remote = @amqp.queue('wakame.rpc.'+queue_name, :auto_delete => true)
+        @queue_name = queue_name
 
       end
 
       def method_missing(method, *args, &blk)
+        amqp = Bunny.new(:spec => '08') # TODO: to connect to other server
+        amqp.start
+        remote = amqp.queue('wakame.rpc.'+@queue_name, :auto_delete => true)
+
         response = nil
         response_id = "wakame.client.response-#{WakameOS::Utility::UniqueKey.new}"
         @rabbit_mutex.synchronize {
-          response = @amqp.queue(response_id, :auto_delete => true)
+          response = amqp.queue(response_id, :auto_delete => true)
         }
         message_id = WakameOS::Utility::UniqueKey.new
         @queue_monitor.synchronize {
-          @remote.publish(::Marshal.dump([method, *args]), :reply_to => response_id, :message_id => message_id)
+          remote.publish(::Marshal.dump([method, *args]), :reply_to => response_id, :message_id => message_id)
         }
 
         still_watch = false
@@ -76,6 +74,7 @@ module WakameOS
         ret = ::Marshal.load(package[:payload])
 
         blk.call(ret) if blk
+        amqp.stop
         raise ret if ret.class.ancestors.include? Exception
         ret
       end

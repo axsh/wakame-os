@@ -21,6 +21,7 @@ module WakameOS
       Signal.trap(:INT) {
         # TODO: flush every thing.
         logger.info "Shutting down..."
+        AMQP.stop { EM.stop }
         exit(1)
       }
 

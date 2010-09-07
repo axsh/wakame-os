@@ -4,7 +4,6 @@ require 'clios'
 require 'rubygems'
 require 'mq'
 
-# TODO: logging!
 #
 module WakameOS
   module Service
@@ -35,12 +34,12 @@ module WakameOS
           mq ||= MQ
           mq.queue(name, :auto_delete => true).subscribe(:ack=>true){ |info, request|
             info.ack
-            Thread.start {
+            EM.defer {
               method, *args = ::Marshal.load(request)
-              # print "* Got RPC request: #{method.to_s} on #{name.to_s}\n"
               # TODO: error check for arity
               ret = blk.call(method, *args)
               mq.queue(info.reply_to, :auto_delete => true).publish(::Marshal.dump(ret), :key => info.reply_to, :message_id => info.message_id) if info.reply_to
+              mq.queues[info.reply_to] = nil
             }
           }
         } if block_given?
@@ -51,7 +50,6 @@ module WakameOS
             info.ack
             EM.defer {
               method, *args = ::Marshal.load(request)
-              # print "* Got RPC request: #{method.to_s} on #{name.to_s}\n"
               begin
                 # TODO: error check for arity
                 ret = klass.send(method, *args)
@@ -61,6 +59,7 @@ module WakameOS
                 p ret.inspect
               end
               mq.queue(info.reply_to, :auto_delete => true).publish(::Marshal.dump(ret), :key => info.reply_to, :message_id => info.message_id) if info.reply_to
+              mq.queues[info.reply_to] = nil
             }
           }
         } if klass

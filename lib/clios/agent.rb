@@ -54,7 +54,7 @@ module WakameOS
       logger.info "Entry: #{results.inspect}"
       
       # Finalization
-      [:EXIT, :TERM, :HUP].each do |sig|
+      [:EXIT, :TERM].each do |sig|
         Signal.trap(sig){
           logger.info "Shutting down..."
           self.destroy
