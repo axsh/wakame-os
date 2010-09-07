@@ -29,6 +29,9 @@ h2. Example: Launch a new instance
 
 h2. Example: Configure instances & launch
 
+You can build "the Hybrid-cloud," and use it in your code.
+Difinition of specification have a logical name.
+
 h3. config/cloud_catalog.rb
 
 <pre>
@@ -54,6 +57,22 @@ h3. config/cloud_catalog.rb
 </code>
 </pre>
 
+h3. fork_sample.rb
+
+You can use the logical name of specification in your code.
+
+<pre>
+<code>
+  require 'wakame'
+  process = Wakame::Process.setup(:credential => {:user => 'your_name'},
+                                  :spec_name => 'aws_fedora_core_8')
+  
+  process.fork {
+    print "Running code on the remote fedora core 8!\n"
+  }
+</code>
+</pre>
+
 h3. instance_sample.rb
 
 <pre>
@@ -66,17 +85,48 @@ h3. instance_sample.rb
 </code>
 </pre>
 
-h3. fork_sample.rb
+h2. Example: PI calc
 
 <pre>
 <code>
+  require 'rubygems'
   require 'wakame'
-  process = Wakame::Process.setup(:credential => {:user => 'your_name'},
-                                  :spec_name => 'aws_fedora_core_8')
+  require 'rational'
   
-  process.fork {
-    print "Running code on the remote fedora core 8!\n"
+  credential = { :user => 'yam' }
+  
+  process = Wakame::Process.setup( :credential => credential,
+                                   :spec_name  => 'unknown'
+                                   )
+  
+  queue   = Wakame::Queue.setup
+  
+  # How many compute?
+  dist = 30
+  challange = 1000000
+  
+  dist.times { |no|
+    process.fork(no, challange, queue) { |no, challange, queue|
+      hit  = 0
+  
+      total.times {
+        x = rand
+        y = rand
+        hit += 1 if x*x+y*y<1.0
+      }
+      queue.push [no, Rational(hit, total)]
+    }
   }
+  
+  print "Process were distributed. Waiting results...\n"
+  
+  rat = 0
+  dist.times { |i|
+    data = queue.pop
+    print "Arrival result #{i+1}/#{dist} from node number. #{data[0]} -> #{data[1]}\n"
+    rat += data[1]
+  }
+  print "Final result. PI = #{(rat * Rational(4, dist)).to_f}\n"
 </code>
 </pre>
 
