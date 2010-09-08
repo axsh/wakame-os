@@ -18,7 +18,6 @@ module WakameOS
           @prefix = option.delete(:prefix) || 'wakame.user.queue.'
           @name   = option.delete(:name  ) || WakameOS::Utility::UniqueKey.new
           @option = option
-          @bunny_option = { :spec => '08' } # TODO: other server
 
           WakameOS::Client::SystemCall.instance.add_gc_target_queues(@prefix+@name)
 
