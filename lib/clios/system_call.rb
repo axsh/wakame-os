@@ -9,10 +9,6 @@ require 'date'
 require 'thread'
 require 'monitor'
 
-require 'rubygems'
-# require 'carrot'
-require 'bunny'
-
 #
 module WakameOS
   class SystemCall
@@ -584,7 +580,7 @@ module WakameOS
         queue = nil
         name = queue_name(credential, spec_name)
         @@amqp_mutex.synchronize {
-          amqp = Bunny.new(:spec => '08') # TODO: support connection to other host
+          amqp = WakameOS::Client::Environment.create_amqp_client
           amqp.start
 
           queue = amqp.queue(name,
@@ -615,7 +611,7 @@ module WakameOS
       def pop_job(credential, spec_name='default')
         ret = :queue_empty
         @@amqp_mutex.synchronize {
-          amqp = Bunny.new(:spec => '08') # TODO: support connection to other host
+          amqp = WakameOS::Client::Environment.create_amqp_client
           amqp.start
           ret = queue.pop.dup
           amqp.stop

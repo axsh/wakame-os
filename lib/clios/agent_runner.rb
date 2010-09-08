@@ -30,6 +30,11 @@ module WakameOS
           config[:boot_token] = _boot_token
           boot_token = _boot_token
         }
+
+        opts.on("-s", "--server SERVER", String){|_server|
+          config[:server] = _server
+          WakameOS::Client::Environment.os_server = _server
+        }
         
         opts.parse!(argv[0])
         exit(1) if config[:require_exit]

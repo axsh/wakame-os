@@ -27,12 +27,13 @@ module WakameOS
   end
 
   module Client
-    autoload :SetupBase, 'clios/remote'
-    autoload :AsyncRpc,  'clios/client'
-    autoload :SyncRpc,   'clios/client'
-    autoload :Process,   'clios/remote_process'
-    autoload :Queue,     'clios/remote_queue'
-    autoload :SystemCall, 'wakame/client/system_call'
+    autoload :Environment, 'clios/environment'
+    autoload :SetupBase,   'clios/remote'
+    autoload :AsyncRpc,    'clios/rpc'
+    autoload :SyncRpc,     'clios/rpc'
+    autoload :Process,     'clios/remote_process'
+    autoload :Queue,       'clios/remote_queue'
+    autoload :SystemCall,  'clios/client'
   end
 
   module Utility

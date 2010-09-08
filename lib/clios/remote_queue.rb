@@ -1,6 +1,5 @@
 #
 require 'clios'
-require 'bunny'
 
 module WakameOS
   module Client
@@ -26,7 +25,7 @@ module WakameOS
         end
 
         def finalize
-          amqp = Bunny.new(@bunny_option)
+          amqp = WakameOS::Client::Environment.create_amqp_client
           amqp.start
           amqp.queue(@prefix+@name, :auto_delete => true, :exclusive => false).delete
           amqp.stop
@@ -35,14 +34,14 @@ module WakameOS
         end
 
         def push(object)
-          amqp = Bunny.new(@bunny_option)
+          amqp = WakameOS::Client::Environment.create_amqp_client
           amqp.start
           amqp.queue(@prefix+@name, :auto_delete => true, :exclusive => false).publish(::Marshal.dump(object))
           amqp.stop
         end
 
         def pop(wait=true)
-          amqp = Bunny.new(@bunny_option)
+          amqp = WakameOS::Client::Environment.create_amqp_client
           amqp.start
           queue = amqp.queue(@prefix+@name, :auto_delete => true, :exclusive => false)
           begin

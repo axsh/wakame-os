@@ -14,7 +14,7 @@ module WakameOS
         credential = option.delete(:credential) || @@credential
         spec_name  = option.delete(:spec_name)  || @@spec_name  || 'default'
         
-        option = option.dup.merge({:spec => '08'})
+        option = option.dup
         @@credential = credential.dup
         @@spec_name  = spec_name.dup
         @@option     = option

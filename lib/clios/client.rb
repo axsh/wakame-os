@@ -1,84 +1,75 @@
 #
-require 'rubygems'
-require 'mq'
+require 'clios'
 
-require 'bunny'
-# require 'carrot'
-
-require 'thread'
 require 'monitor'
 
 #
 module WakameOS
   module Client
-    class AsyncRpc
-      include Logger
+    class SystemCall
 
-      def initialize(queue_name, mq=nil)
-        @callbacks = {}
-        @mq = mq || MQ.new
-        @remote = mq.queue('wakame.rpc.'+queue_name)
+      # Class Methods
+      @@instance = nil
+      def self.setup
+        raise AlreadySetup.new if @@instance
+        @@instance = self.new
+        @@instance.connect
+        @@instance
+      end
+      def self.teardown
+        raise AlreadyTeardown.new unless @@instance
+        @@instance.disconnect
+        @@instance = nil
+      end
+      def self.instance
+        self.setup unless @@instance
+        @@instance
+      end
+      
+      class AlreadySetup < Exception; end
+      class AlreadyTeardown < Exception; end
+      
+      # Instance Methods
+      def initialize
+        @mutex = Monitor.new
+        @gc_target_queues = {}
+      end
 
-        @name = "wakame.client.response-#{WakameOS::Utility::UniqueKey.new}"
-        response = @mq.queue(@name, :auto_delete => true).subscribe{|info, msg|
-          if callback = @callbacks.delete(info.message_id)
-            callback.call ::Marshal.load(msg)
+      def connect
+        @mutex.synchronize {
+          @amqp = WakameOS::Client::Environment.create_amqp_client
+          @amqp.start
+        }
+      end
+      
+      def add_gc_target_queues(queue_names)
+        @mutex.synchronize {
+          queue_names.each do |queue_name|
+            @gc_target_queues[queue_name] = true
           end
         }
-
-        @monitor = Monitor.new
       end
 
-      def method_missing(method, *args, &blk)
-        message_id = WakameOS::Utility::UniqueKey.new
-        @monitor.synchronize {
-          @callbacks[message_id] = blk if blk
-          @remote.publish(::Marshal.dump([method, *args]), :reply_to => blk ? @name : nil, :message_id => message_id)
+      def remove_gc_target_queues(queue_names)
+        @mutex.synchronize {
+          queue_names.each do |queue_name|
+            @gc_target_queues.delete(queue_name)
+          end
         }
-        true
       end
+
+      def disconnect
+        @mutex.synchronize {
+          @gc_target_queues.keys.each do |queue_name|
+            begin
+              @amqp.queue(queue_name, :auto_delete => true).delete
+            rescue => e
+              # ingore any exception
+            end
+          end
+          @amqp.stop
+        }
+      end    
     end
-
-    class SyncRpc
-      include Logger
-
-      def initialize(queue_name)
-        @rabbit_mutex = Monitor.new
-        @queue_monitor = Monitor.new
-        @queue_name = queue_name
-
-      end
-
-      def method_missing(method, *args, &blk)
-        amqp = Bunny.new(:spec => '08') # TODO: to connect to other server
-        amqp.start
-        remote = amqp.queue('wakame.rpc.'+@queue_name, :auto_delete => true)
-
-        response = nil
-        response_id = "wakame.client.response-#{WakameOS::Utility::UniqueKey.new}"
-        @rabbit_mutex.synchronize {
-          response = amqp.queue(response_id, :auto_delete => true)
-        }
-        message_id = WakameOS::Utility::UniqueKey.new
-        @queue_monitor.synchronize {
-          remote.publish(::Marshal.dump([method, *args]), :reply_to => response_id, :message_id => message_id)
-        }
-
-        still_watch = false
-        begin
-          package = response.pop()
-          sleep 0.1 if still_watch = (package[:payload]==:queue_empty)
-        end while still_watch # TODO: fix a lazy code...
-        response.delete
-
-        ret = ::Marshal.load(package[:payload])
-
-        blk.call(ret) if blk
-        amqp.stop
-        raise ret if ret.class.ancestors.include? Exception
-        ret
-      end
-    end
-    
   end
 end

@@ -5,9 +5,6 @@ require 'util'
 require 'thread'
 require 'monitor'
 
-require 'bunny'
-# require 'carrot'
-
 module WakameOS
   module Client
     class Process < SetupBase
@@ -70,7 +67,7 @@ module WakameOS
         def _execute(job, need_response=false)
           result = nil
 
-          amqp = Bunny.new(option)
+          amqp = WakameOS::Client::Environment.create_amqp_client
           amqp.start
 
           gc_targets = []

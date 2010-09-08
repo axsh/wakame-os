@@ -6,9 +6,6 @@ require 'cloud'
 require 'thread'
 require 'monitor'
 
-require 'rubygems'
-require 'bunny'
-
 #
 module WakameOS
   class Agent
@@ -66,7 +63,7 @@ module WakameOS
       @heart_beat = Thread.new {
         loop_flag = true
         begin
-          sleep(@heart_beat_interval+(::Kernel.rand(10)/10.0))
+          sleep(@heart_beat_interval.to_f+::Kernel.rand)
           touch(@working)
         end while loop_flag
       }
@@ -76,9 +73,9 @@ module WakameOS
         queue = nil
 
         logger.info "Job picker setup."
-        bunny = Bunny.new(:spec => '08') # configure from command line option
-        bunny.start
-        queue = bunny.queue(@queue_name, :auto_delete => true, :exclusive => false)
+        amqp = WakameOS::Client::Environment.create_amqp_client
+        amqp.start
+        queue = amqp.queue(@queue_name, :auto_delete => true, :exclusive => false)
         thread_queue = Queue.new
 
         loop_flag = true
@@ -101,7 +98,7 @@ module WakameOS
 
             # job.credential
             # job.spec_name
-            direct_queue = bunny.queue(job.job[:request], :auto_delete => true)
+            direct_queue = amqp.queue(job.job[:request], :auto_delete => true)
             counter = 10
             begin
               logger.info "Waiting a receiving code..."
@@ -149,7 +146,7 @@ module WakameOS
                   end
 
                   if job.job[:response]
-                    response_queue = bunny.queue(job.job[:response], :auto_delete => true)
+                    response_queue = amqp.queue(job.job[:response], :auto_delete => true)
                     response_queue.publish(::Marshal.dump(result))
                   end
                 }
