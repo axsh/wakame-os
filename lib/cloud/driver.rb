@@ -9,12 +9,15 @@ module WakameOS
   module Cloud
 
     class Driver
+      include Logger
       @@driver_create_mutex = Monitor.new
       def self.create(provider_name, config)
         ret = nil
         @@driver_create_mutex.synchronize {
           provider_name = (provider_name == 'aws')? 'AWS' : provider_name.camel_case # :-(
-          ret = eval(provider_name.to_s + '.new(config)')
+          logger.info "setup driver for provider named \"#{provider_name}\" with config."
+          eval_string = provider_name.to_s + '.new(config)'
+          ret = eval(eval_string)
         }
         ret
       end
