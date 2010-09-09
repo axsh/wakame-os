@@ -149,7 +149,7 @@ module WakameOS
         spec = @catalog.spec(spec_name)
         if spec
           driver = _get_driver(spec)
-          instances = driver.create_instances([_uncapsuled(spec.requirement).to_hash])
+          instances = driver.create_instances([_uncapsuled(spec.requirement).to_hash_from_table])
           instances.each do |instance|
             wakame_instance = HybridInstance.new(credential, spec.driver, spec_name, spec, instance)
             @instance_list_mutex.synchronize {
@@ -201,7 +201,7 @@ module WakameOS
       
       def _get_driver(spec)
         driver_name = spec.driver
-        credential = _uncapsuled(@catalog.credential(spec.credential)).to_hash_table
+        credential = _uncapsuled(@catalog.credential(spec.credential)).to_hash_from_table
         driver = WakameOS::Cloud::Driver.create(driver_name, credential)
         _entry(driver, driver_name, credential)
         driver
