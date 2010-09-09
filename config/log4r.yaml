@@ -1,0 +1,28 @@
+log4r_config:
+  
+  pre_config:
+    global: "INFO"
+  
+  loggers:
+    - name: "WakameOS"
+      level: INFO
+      trace: 'true'
+      outputters:
+        - stdout
+        - log_file
+  
+  outputters:
+    - name: stdout
+      type: StdoutOutputter
+      formatter:
+        type: PatternFormatter
+        pattern: "%d %c [%l]: %M"
+        date_pattern: "%Y/%m/%d %H:%M:%S"
+    - name: log_file
+      type: FileOutputter
+      filename: "/tmp/log4r_test.log"
+      trunc: 'false'
+      formatter:
+        type: PatternFormatter
+        pattern: "%d [%l] %C(%t) - %M"
+        date_pattern: "%Y/%m/%d %H:%M:%S"

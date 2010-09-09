@@ -1,28 +1,37 @@
 # -*- coding: utf-8 -*-
 
 require 'log4r'
+require 'log4r/yamlconfigurator'    
+
+$LOAD_PATH.each do |load_path|
+  begin
+    Log4r::YamlConfigurator.load_yaml_file(load_path+'/log4r.yaml');
+    break
+  rescue =>e
+    # try to next
+  end
+end
 
 module WakameOS
   # Injects +logger+ method to the included class.
   # The output message from the logger methods starts the module name trailing message body.
   module Logger
 
-    # Isono top level logger
-    rootlog = Log4r::Logger.new('WakameOS')
-    formatter = Log4r::PatternFormatter.new(:depth => 9999, # stack trace depth
-                                            :pattern => "%d %c [%l]: %M",
-                                            :date_format => "%Y/%m/%d %H:%M:%S"
-                                            )
-    rootlog.add(Log4r::StdoutOutputter.new('stdout', :formatter => formatter))
-    
+    ## Wakame-os top level logger
+    rootlog = Log4r::Logger['WakameOS']
+    #formatter = Log4r::PatternFormatter.new(:depth => 9999, # stack trace depth
+    #                                        :pattern => "%d %c [%l]: %M",
+    #                                        :date_format => "%Y/%m/%d %H:%M:%S"
+    #                                        )
+    #rootlog.add(Log4r::StdoutOutputter.new('stdout', :formatter => formatter))
     
     def self.included(klass)
       klass.class_eval {
 
-        @class_logger = Log4r::Logger.new(klass.to_s)
+        @@class_logger = Log4r::Logger.new(klass.to_s)
 
         def self.logger
-          @class_logger
+          @@class_logger
         end
 
         def logger
@@ -30,7 +39,7 @@ module WakameOS
         end
         
         def self.logger_name
-          @class_logger.path
+          @@class_logger.path
         end
 
         #def self.logger_name=(name)
