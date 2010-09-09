@@ -36,6 +36,7 @@ WakameOS::Configuration.cloud_catalog do |cc|
         lt.running = 60
     end
     s.requirement do |r|
+      r.instance_type = 't1.micro'
       r.image_id = 'ami-84db39ed'
     end
   end
@@ -55,4 +56,25 @@ WakameOS::Configuration.cloud_catalog do |cc|
   end
 
 end
+
+# if your cloud credential must be separated from this file for security reason, 
+# please wrote your own credential file.
+# secure_section.rb will be loaded automaticaly.
+#
+begin
+  require File.expand_path('../secure_section', __FILE__)
+rescue LoadError => e
+  # No load, No secure.
+end
+#
+# ---[secure_section.rb]---
+# require 'clios'
+# WakameOS::Configuration.cloud_catalog do |cc|
+#
+#   cc.credential 'amazon_account' do |c|
+#     c.access_key        = ''
+#     c.secret_access_key = ''
+#  end
+#
+# end
 
