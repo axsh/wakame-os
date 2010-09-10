@@ -5,6 +5,7 @@
 
 # require section
 require 'rubygems'
+$:.unshift(File.dirname(__FILE__))
 require 'clios'
 
 module Wakame
