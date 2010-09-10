@@ -33,6 +33,7 @@ module WakameOS
     autoload :SyncRpc,     'clios/rpc'
     autoload :Process,     'clios/remote_process'
     autoload :Queue,       'clios/remote_queue'
+    autoload :Event,       'clios/remote_event'
     autoload :SystemCall,  'clios/client'
   end
 
