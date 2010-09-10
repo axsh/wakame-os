@@ -9,12 +9,13 @@ module WakameOS
       
       @@env = nil 
       
-      def self.init
-        @@env = {}.merge({
-                           :os_server            => ENV['WAKAME_OS_SERVER']            || 'localhost',
-                           :os_user              => ENV['USER']                        || 'wakame',
-                           :os_default_spec_name => ENV['WAKAME_OS_DEFAULT_SPEC_NAME'] || 'default',
-                         })
+      def self.init(option={})
+        @@env = {
+          :os_server            => ENV['WAKAME_OS_SERVER']            || 'localhost',
+          :os_user              => ENV['USER']                        || 'wakame',
+          :os_secret_key        => ENV['WAKAME_OS_SECRET_KEY']        || '',
+          :os_default_spec_name => ENV['WAKAME_OS_DEFAULT_SPEC_NAME'] || 'default',
+        }.merge(option)
       end
 
       def self.value(name)
@@ -26,6 +27,7 @@ module WakameOS
         init unless @@env
         {
           :user => @@env[:os_user],
+          :secret_key => @@env[:os_secret_key],
         }
       end
 
