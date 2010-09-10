@@ -89,12 +89,12 @@ module WakameOS
           @alive = true
           @life_time = spec.life_time
           @life_time = { # in sec
-            :pending       => life_time.pending       || 30*60,
-            :running       => life_time.running       || 55*60,
-            :rebooting     => life_time.rebootine     || 30*60,
-            :shutting_down => life_time.shutting_down || 30*60,
-            :terminated    => life_time.terminated    ||  1*60,
-            :accidental    => life_time.accidental    ||  1*60,
+            :pending       => life_time.pending       ||  55*60,
+            :running       => life_time.running       ||  55*60,
+            :rebooting     => life_time.rebootine     ||  55*60,
+            :shutting_down => life_time.shutting_down ||  55*60,
+            :terminated    => life_time.terminated    ||  15*60,
+            :accidental    => life_time.accidental    ||  15*60,
           }
 
           @create_on = DateTime.now
@@ -250,12 +250,13 @@ module WakameOS
                   if instance.driver_name==driver_name
                     onmemory_instances << key.dup
                     duration_sec = ((now-instance.update_on)*24*60*60).to_i
-                    case instance.state.to_s
-                    when 'running'
-                      mark_to_destroy << [instance.credential.dup, instance.instance_name.dup] if
-                        duration_sec>=instance.life_time[:running] # && instance.agents.size<1
-                    else
-                      mark_to_delete << key.dup if duration_sec >= (instance.life_time[instance.state.to_sym] || 1*60)
+                    if duration_sec >= (instance.life_time[instance.state.to_sym] || 1*60)
+                      case instance.state.to_s
+                      when 'terminated'
+                        mark_to_delete << key.dup
+                      else
+                        mark_to_destroy << [instance.credential.dup, instance.instance_name.dup] 
+                      end
                     end
                   end
                 end
