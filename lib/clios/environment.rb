@@ -13,8 +13,9 @@ module WakameOS
         @@env = {
           :os_server            => ENV['WAKAME_OS_SERVER']            || 'localhost',
           :os_user              => ENV['USER']                        || 'wakame',
-          :os_secret_key        => ENV['WAKAME_OS_SECRET_KEY']        || '',
+          :os_secret_key        => ENV['WAKAME_OS_SECRET_KEY']        || nil,
           :os_default_spec_name => ENV['WAKAME_OS_DEFAULT_SPEC_NAME'] || 'default',
+          :os_instance_name     => nil,
         }.merge(option)
       end
 
@@ -26,8 +27,9 @@ module WakameOS
       def self.os_user_credential
         init unless @@env
         {
-          :user => @@env[:os_user],
-          :secret_key => @@env[:os_secret_key],
+          :user          => @@env[:os_user],
+          :secret_key    => @@env[:os_secret_key],
+          :instance_name => @@env[:os_instance_name],
         }
       end
 

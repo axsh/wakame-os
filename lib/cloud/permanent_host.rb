@@ -44,7 +44,9 @@ module WakameOS
           @@instances_mutex.synchronize {
             @@instances[i.global_name] = i
           }
-          _start_agent(i.global_name)
+
+          parent_global_name = option_hash[:wakame_parent_instance_name]
+          _start_agent(i.global_name, parent_global_name)
         end
         ret
       end
@@ -97,7 +99,7 @@ module WakameOS
       end
       protected :_purge
 
-      def _start_agent(global_name)
+      def _start_agent(global_name, parent_global_name=nil)
         pid = nil
         @@agent_mutex.synchronize {
           pid = @@agents[global_name]
@@ -105,7 +107,9 @@ module WakameOS
         }
         return if pid!=nil
         if !(pid = Process.fork)
-          exec './bin/agent', '--token', global_name.to_s
+          argv  = ['./bin/agent', '--token', global_name.to_s]
+          argv += ['--parent', parent_global_name] if parent_global_name
+          exec *argv
           exit
         end
         @@agent_mutex.synchronize {

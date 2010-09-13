@@ -41,12 +41,20 @@ module WakameOS
         attr_reader   :credential
         attr_accessor :driver_name, :spec_name
 
-        attr_accessor :instance_name, :parent_instance_name
+        attr_accessor :instance_name, :parent_instance_name, :child_instance_names
         attr_accessor :life_time
         attr_accessor :state, :create_on, :update_on, :alive
         
         # TODO: Monitoring
         # attr_accessor :cpu_usage, :memory_usage
+
+        def add_child_name(name)
+          (@child_instance_names << name).uniq!
+        end
+
+        def remove_child_name(name)
+          @child_instance_names -= [name]
+        end
 
         def touch
           @update_on = DateTime.now
@@ -64,6 +72,7 @@ module WakameOS
             :specification => @spec_name,
             :instance_name => @instance_name,
             :parent_instance_name => @parent_instance_name,
+            :child_instance_names => @child_instance_names,
             :state => @state,
             :alive => @alive,
             :life_time => @life_time,
@@ -73,7 +82,7 @@ module WakameOS
         end
 
         private
-        def initialize(credential, driver_name, spec_name, spec, instance)
+        def initialize(credential, driver_name, spec_name, spec, instance, parent_instance_name=nil)
 
           @@sequencial_number_mutex.synchronize {
             @boot_token = Digest::MD5.hexdigest(`/sbin/ip route get 8.8.8.8`+Time.now.to_i.to_s+@@sequencial_number.to_s)
@@ -84,17 +93,18 @@ module WakameOS
           @driver_name = driver_name
           @spec_name = spec_name || 'default'
           @instance_name = instance.global_name
-          @parent_instance_name = nil
+          @parent_instance_name = parent_instance_name
+          @child_instance_names = []
           @state = instance.state.to_s
           @alive = true
-          @life_time = spec.life_time
+          life_time = spec.life_time
           @life_time = { # in sec
             :pending       => life_time.pending       ||  55*60,
             :running       => life_time.running       ||  55*60,
             :rebooting     => life_time.rebootine     ||  55*60,
             :shutting_down => life_time.shutting_down ||  55*60,
-            :terminated    => life_time.terminated    ||  15*60,
-            :accidental    => life_time.accidental    ||  15*60,
+            :terminated    => life_time.terminated    ||   1*60,
+            :accidental    => life_time.accidental    ||   1*60,
           }
 
           @create_on = DateTime.now
@@ -151,11 +161,13 @@ module WakameOS
           driver = _get_driver(spec)
           instances = driver.create_instances([_uncapsuled(spec.requirement).to_hash_from_table])
           instances.each do |instance|
-            wakame_instance = HybridInstance.new(credential, spec.driver, spec_name, spec, instance)
+            parent_instance_name = credential.delete(:instance_name)
+            wakame_instance = HybridInstance.new(credential, spec.driver, spec_name, spec, instance, parent_instance_name)
             @instance_list_mutex.synchronize {
               @instances_by_boot_token[wakame_instance.boot_token] = wakame_instance
               @instances[wakame_instance.instance_name] = wakame_instance
               ret << wakame_instance.instance_name.dup
+              @instances[parent_instance_name].add_child_name(wakame_instance.instance_name) if parent_instance_name
             }
           end
         else
@@ -166,24 +178,41 @@ module WakameOS
       
       def destroy_instances(credential, name_array)
         return [] unless name_array.is_a?(Array) && name_array.size>0
+
         ret = []
-        name_array.each do |name|
-          @instance_list_mutex.synchronize {
+        @instance_list_mutex.synchronize {
+          target_array = []
+          name_array.each do |name|
+            target_array += _destroy_instances_recursive(name)
+          end
+          logger.info "destroy target (include children): "+ target_array.inspect
+          
+          target_array.uniq.each do |name|
             instance = @instances[name]
             if instance
               spec = @catalog.spec(instance.spec_name)
               driver = _get_driver(spec)
               if driver.destroy_instances([instance.instance_name])
                 ret << instance.instance_name
+                @instances[instance.parent_instance_name].remove_child_name(instance.instance_name) if instance.parent_instance_name
               end
             end
-          }
+          end
+        }
+        ret
+      end
+      def _destroy_instances_recursive(instance_name)
+        ret = [instance_name]
+        @instances[instance_name].child_instance_names.each do |child_instance_name|
+          ret += _destroy_instances_recursive(child_instance_name)
         end
         ret
       end
+      protected :_destroy_instances_recursive
       
       def reboot_instances(credential, name_array)
         return false unless name_array.is_a?(Array) && name_array.size>0
+        # TODO: need imprementation
         # @cloud_controller.reboot_instances(name_array)
         true
       end
@@ -211,7 +240,7 @@ module WakameOS
       def _entry(driver, driver_name, credential={})
         value = {
           :driver_name => driver_name,
-          :credential => credential
+          :user => credential[:user],
         }
         unless @patrol_credentials.key? value.hash
           @patrol_credentials[value.hash] = value
@@ -253,13 +282,18 @@ module WakameOS
                     if duration_sec >= (instance.life_time[instance.state.to_sym] || 1*60)
                       case instance.state.to_s
                       when 'terminated'
+                        logger.info "#{instance.instance_name} will be delete from memory."
                         mark_to_delete << key.dup
                       else
+                        logger.info "#{instance.instance_name} will be shutted down."
                         mark_to_destroy << [instance.credential.dup, instance.instance_name.dup] 
                       end
                     end
                   end
                 end
+
+                logger.info "deletion target: "+ mark_to_delete.inspect
+                logger.info "destroy target: "+ mark_to_destroy.inspect
 
                 unless iaas_has_any_trouble
                   logger.info "checking invisible instance with unpredictable reason..."
@@ -464,6 +498,7 @@ module WakameOS
       # Agent (Waiting worker) Registration
       # Notes: this credential is for to identify the agent, not user!
       def entry_agents(credential_array)
+        return [] unless credential_array.is_a? Array
         ret = []
         credential_array.each do |credential|
           if (boot_token = credential[:boot_token])
@@ -481,16 +516,17 @@ module WakameOS
                 _entry(instance.credential)
               }
               ret << {
-                :agent_id   => agent_id,
-                :credential => agent.instance.credential,
-                :spec_name  => agent.spec_name,
-                :queue_name => queue_name(agent.instance.credential, agent.spec_name),
+                :agent_id      => agent_id,
+                #:credential    => agent.instance.credential,
+                :instance_name => agent.instance.instance_name,
+                :spec_name     => agent.spec_name,
+                :queue_name    => queue_name(agent.instance.credential, agent.spec_name),
               }
             rescue InstanceController::InstanceNotFound => e
               ret = e
             end
           end
-        end if credential_array.is_a? Array
+        end
         ret
       end
       
@@ -567,7 +603,8 @@ module WakameOS
       
       # Job Registration (use a user credential)
       def queue_name(credential, spec_name='default')
-        @queue_name_prefix + spec_name + '.' + Digest::MD5.hexdigest(::Marshal.dump(credential))
+        parent_instance_name = credential[:instance_name] || ''
+        @queue_name_prefix + parent_instance_name + '.' + spec_name + '.' + Digest::MD5.hexdigest(credential[:user] || '')
       end
       
       def process_jobs(credential, job_array, spec_name='default')

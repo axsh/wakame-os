@@ -2,6 +2,7 @@
 #
 require 'clios'
 require 'cloud'
+require 'wakame'
 
 require 'thread'
 require 'monitor'
@@ -16,7 +17,7 @@ module WakameOS
     # Member
     attr_reader :client
     attr_reader :boot_token, :agent_id, :alive
-    attr_reader :queue_name
+    attr_reader :instance_name, :queue_name
     
     #####################################################################
     # Entry the Service as an Agent
@@ -25,7 +26,7 @@ module WakameOS
 
       @boot_token           = boot_token
       @agent_id             = nil
-      @credential           = nil
+      # @credential           = nil
       @spec_name            = nil
 
       @alive                = true
@@ -43,10 +44,11 @@ module WakameOS
       @client = WakameOS::Client::SyncRpc.new('agent')
       results = @client.entry_agents([credential])
       results.each do |result|
-        @agent_id   = result[:agent_id  ]
-        @credential = result[:credential]
-        @spec_name  = result[:spec_name ]
-        @queue_name = result[:queue_name]
+        @agent_id      = result[:agent_id  ]
+        # @credential    = result[:credential]
+        @instance_name = result[:instance_name]
+        @spec_name     = result[:spec_name ]
+        @queue_name    = result[:queue_name]
       end
       logger.info "Entry: #{results.inspect}"
       
@@ -127,6 +129,7 @@ module WakameOS
                 logger.info "** Job arrival: #{code}"
                 thread = Thread.new {
 
+                  Wakame::Environment.os_instance_name = @instance_name
                   c = Class.new
                   c.instance_eval(code)
 
