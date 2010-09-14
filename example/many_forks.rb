@@ -20,7 +20,7 @@ threads = []
 50.times { |i|
   threads << Thread.new {
     print "Thread #{i} setup.\n"
-    process.fork(5+rand(10), &proc1) 
+    process.fork(5+rand(10), &rutine) 
     print "done.\n"
   }
 }
