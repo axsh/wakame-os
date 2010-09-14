@@ -16,17 +16,18 @@ module WakameOS
     #####################################################################
     # Member
     attr_reader :client
-    attr_reader :boot_token, :agent_id, :alive
+    attr_reader :boot_token, :parent_boot_token, :agent_id, :alive
     attr_reader :instance_name, :queue_name
     
     #####################################################################
     # Entry the Service as an Agent
     include WakameOS::Service::Kernel
-    def initialize(boot_token)
+    def initialize(boot_token, parent_boot_token=nil)
 
       @boot_token           = boot_token
+      @parent_boot_token    = parent_boot_token
       @agent_id             = nil
-      # @credential           = nil
+      @credential           = nil
       @spec_name            = nil
 
       @alive                = true
@@ -44,13 +45,13 @@ module WakameOS
       @client = WakameOS::Client::SyncRpc.new('agent')
       results = @client.entry_agents([credential])
       results.each do |result|
-        @agent_id      = result[:agent_id  ]
-        # @credential    = result[:credential]
+        @agent_id      = result[:agent_id]
+        @credential    = result[:credential]
         @instance_name = result[:instance_name]
         @spec_name     = result[:spec_name ]
         @queue_name    = result[:queue_name]
       end
-      logger.info "Entry: #{results.inspect}"
+      logger.debug "Entry: #{results.inspect}"
       
       # Finalization
       [:EXIT, :TERM].each do |sig|
@@ -74,7 +75,7 @@ module WakameOS
       @job_picker = Thread.new {
         queue = nil
 
-        logger.info "Job picker setup."
+        logger.debug "Job picker setup."
         amqp = WakameOS::Client::Environment.create_amqp_client
         amqp.start
         queue = amqp.queue(@queue_name, :auto_delete => true, :exclusive => false)
@@ -84,15 +85,15 @@ module WakameOS
         request_count = 0
         begin
           request_count += 1
-          logger.info "Waiting a job..."
+          logger.debug "Waiting a job named #{@queue_name}..."
           data = queue.pop
-          logger.info "Agent ID: #{@agent_id} picked a job up from #{@queue_name} ... #{data.inspect}"
+          logger.debug "Agent ID: #{@agent_id} picked a job up from #{@queue_name} ... #{data.inspect}"
           unless data[:payload]==:queue_empty
             # WE GOT A JOB REQUEST
             touch
 
             job = ::Marshal.load(data[:payload])
-            logger.info "** A job will come from #{job.inspect}"
+            logger.debug "** A job will come from #{job.inspect}"
 
             @client_mutex.synchronize {
               @assigned = true if @client.assign_job(_credential, job.name)
@@ -103,7 +104,7 @@ module WakameOS
             direct_queue = amqp.queue(job.job[:request], :auto_delete => true)
             counter = 10
             begin
-              logger.info "Waiting a receiving code..."
+              logger.debug "Waiting a receiving code..."
               direct_data = direct_queue.pop
               unless direct_data[:payload]==:queue_empty
                 # WE FIND A JOB!
@@ -126,7 +127,7 @@ module WakameOS
                   result = UnknownProtocol.new("#{program.class.name} is not allow to execute.")
                 end
 
-                logger.info "** Job arrival: #{code}"
+                logger.debug "** Job arrival: #{code}"
                 thread = Thread.new {
 
                   Wakame::Environment.os_instance_name = @instance_name
@@ -137,7 +138,7 @@ module WakameOS
                   if must_call_function
                     begin
                       if argv
-                        logger.info "*** with argv: #{argv.inspect}"
+                        logger.debug "*** with argv: #{argv.inspect}"
                         result = c.remote_task(*argv) 
                       else
                         result = c.remote_task
@@ -159,7 +160,7 @@ module WakameOS
               else
                 sleep(@job_picking_interval)
                 counter -= 1
-                logger.info "No any job. Retry counter is #{counter}."
+                logger.debug "No any job. Retry counter is #{counter}."
               end
             end while counter>0
 
@@ -197,8 +198,9 @@ module WakameOS
 
     def _credential
       {
-        :boot_token => @boot_token,
-        :agent_id   => @agent_id,
+        :boot_token        => @boot_token,
+        :parent_boot_token => @parent_boot_token,
+        :agent_id          => @agent_id,
       }
     end
     protected :_credential

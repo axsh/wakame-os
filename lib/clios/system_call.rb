@@ -185,7 +185,7 @@ module WakameOS
           name_array.each do |name|
             target_array += _destroy_instances_recursive(name)
           end
-          logger.info "destroy target (include children): "+ target_array.inspect
+          logger.debug "destroy target (include children): "+ target_array.inspect
           
           target_array.uniq.each do |name|
             instance = @instances[name]
@@ -251,7 +251,7 @@ module WakameOS
             begin
               sleep(@patrol_interval_sec || 5)
 
-              logger.info "Instance stats checking..."
+              logger.debug "Instance stats checking..."
               online_instances = []
               onmemory_instances = []
               iaas_has_any_trouble = false
@@ -272,7 +272,7 @@ module WakameOS
                   iaas_has_any_trouble = true
                 end
 
-                logger.info "running gabage collector..."
+                logger.debug "running gabage collector..."
                 now = DateTime.now
                 mark_to_delete = []
                 @instances.each do |key, instance|
@@ -282,7 +282,7 @@ module WakameOS
                     if duration_sec >= (instance.life_time[instance.state.to_sym] || 1*60)
                       case instance.state.to_s
                       when 'terminated'
-                        logger.info "#{instance.instance_name} will be delete from memory."
+                        logger.debug "#{instance.instance_name} will be delete from memory."
                         mark_to_delete << key.dup
                       else
                         logger.info "#{instance.instance_name} will be shutted down."
@@ -292,11 +292,11 @@ module WakameOS
                   end
                 end
 
-                logger.info "deletion target: "+ mark_to_delete.inspect
-                logger.info "destroy target: "+ mark_to_destroy.inspect
+                logger.debug "deletion target: "+ mark_to_delete.inspect
+                logger.debug "destroy target: "+ mark_to_destroy.inspect
 
                 unless iaas_has_any_trouble
-                  logger.info "checking invisible instance with unpredictable reason..."
+                  logger.debug "checking invisible instance with unpredictable reason..."
                   # p onmemory_instances.inspect
                   # p online_instances.inspect
                   (onmemory_instances - online_instances).each do |global_name|
@@ -305,14 +305,14 @@ module WakameOS
                   end
                 end
 
-                logger.info "delete from memory..."
+                logger.debug "delete from memory..."
                 mark_to_delete.each do |key|
                   instance = @instances.delete(key)
                   @instances_by_boot_token.delete(instance.boot_token)
                   instance.destroy if instance
                 end
 
-                logger.info "destroy from server farm..."
+                logger.debug "destroy from server farm..."
                 carry_forward = []
                 mark_to_destroy.each do |credential, instance_name|
                   begin
@@ -337,7 +337,7 @@ module WakameOS
                   chance_to_retry = 5
                 end
               }
-              logger.info "Instance stats updated."
+              logger.debug "Instance stats updated."
             end while loop_flag
             logger.info "Patrol thread is finished working."
           end
@@ -479,7 +479,7 @@ module WakameOS
           hash = _user_credential_hash(user_credential)
           _agent_list_mutex(hash).synchronize {
             _agents(hash).values.each do |agent|
-              ret.push(agent.to_hash) if 
+              ret << agent.to_hash if 
                 agent.allow?(user_credential) && 
                 ((has_job && agent.job_id) || !has_job)
             end
@@ -487,7 +487,7 @@ module WakameOS
         else
           @agents_index_mutex.synchronize {
             @agents_index.values.each do |agent|
-              ret.push(agent.to_hash) if
+              ret << agent.to_hash if
                 (has_job && agent.job_id) || !has_job
             end
           }
@@ -517,7 +517,7 @@ module WakameOS
               }
               ret << {
                 :agent_id      => agent_id,
-                #:credential    => agent.instance.credential,
+                :credential    => agent.instance.credential,
                 :instance_name => agent.instance.instance_name,
                 :spec_name     => agent.spec_name,
                 :queue_name    => queue_name(agent.instance.credential, agent.spec_name),
@@ -541,8 +541,14 @@ module WakameOS
                 @job_assign[agent_id] = agent
                 agent.assign_job(job_id)
                 ret = true
+                logger.debug "* succeed to assign a job #{job_id} to agent #{agent_id}."
               end
             }
+          }
+          logger.debug list_agents.inspect
+          Thread.new {
+            sleep 3
+            logger.debug list_agents.inspect
           }
         end
         ret
@@ -575,6 +581,7 @@ module WakameOS
               if agent && agent.job_id
                 agent.finish_job
                 ret = true
+                logger.debug "* succeed to finish a job #{job_id} to agent #{agent_id}."
               end
             }
           }
@@ -603,7 +610,11 @@ module WakameOS
       
       # Job Registration (use a user credential)
       def queue_name(credential, spec_name='default')
-        parent_instance_name = credential[:instance_name] || ''
+        parent_instance_name = ''
+        instance_name = credential[:instance_name]
+        if instance_name && (instance = @instance_controller.search_instance(instance_name))
+          parent_instance_name = instance.parent_instance_name || ''
+        end
         @queue_name_prefix + parent_instance_name + '.' + spec_name + '.' + Digest::MD5.hexdigest(credential[:user] || '')
       end
       
@@ -695,7 +706,7 @@ module WakameOS
             loop_flag = true
             begin
               sleep(@patrol_interval_sec || 10)
-              logger.info "Checking agents..."
+              logger.debug "Checking agents..."
               mark_to_delete = []
               _agent_list_mutex(hash).synchronize {
                 _agents(hash).each do |agent_id, agent|
@@ -703,7 +714,7 @@ module WakameOS
                 end
                 mark_to_delete.each do |agent_id|
                   agent = _agents(hash).delete(agent_id)
-                  logger.info "Agent ID: #{agent_id} is gone."
+                  logger.debug "Agent ID: #{agent_id} is gone."
                   agent.destroy
                   @agents_index_mutex.synchronize {
                     @agents_index.delete(agent_id)
