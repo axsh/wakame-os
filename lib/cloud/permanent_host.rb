@@ -108,7 +108,7 @@ module WakameOS
         return if pid!=nil
         if !(pid = Process.fork)
           argv  = ['./bin/agent', '--token', global_name.to_s]
-          argv += ['--parent', parent_global_name] if parent_global_name
+          argv += ['--parent_token', parent_global_name] if parent_global_name
           exec *argv
           exit
         end

@@ -12,6 +12,7 @@ module WakameOS
       def self.init(option={})
         @@env = {
           :os_server            => ENV['WAKAME_OS_SERVER']            || 'localhost',
+          :os_server_port       => ENV['WAKAME_OS_PORT']              || 5672,
           :os_user              => ENV['USER']                        || 'wakame',
           :os_secret_key        => ENV['WAKAME_OS_SECRET_KEY']        || nil,
           :os_default_spec_name => ENV['WAKAME_OS_DEFAULT_SPEC_NAME'] || 'default',
@@ -35,7 +36,7 @@ module WakameOS
 
       def self.create_amqp_client
         init unless @@env
-        return Bunny.new(:spec => '08', :host => self.os_server)
+        return Bunny.new(:spec => '08', :host => self.os_server, :port => self.os_server_port)
       end
 
       def self.method_missing(method, *argv, &block)

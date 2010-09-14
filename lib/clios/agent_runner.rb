@@ -14,6 +14,7 @@ module WakameOS
         print "Copyright (C) Wakame Software Fundation.\n"
         
         boot_token = "UNKNOWN.#{WakameOS::Utility::UniqueKey.new}"
+        parent_boot_token = nil
         config = WakameOS::Configuration.default_server
         opts = OptionParser.new
         
@@ -31,9 +32,19 @@ module WakameOS
           boot_token = _boot_token
         }
 
+        opts.on("-pt", "--parent_token TOKEN", String){|_boot_token|
+          config[:parent_boot_token] = _boot_token
+          parent_boot_token = _boot_token
+        }
+
         opts.on("-s", "--server SERVER", String){|_server|
           config[:server] = _server
           WakameOS::Client::Environment.os_server = _server
+        }
+
+        opts.on("-p", "--port PORT", Integer){|_port|
+          config[:port] = _port
+          WakameOS::Client::Environment.os_server_port = _port
         }
         
         opts.parse!(argv[0])
@@ -43,7 +54,7 @@ module WakameOS
         logger.info "Token(boot_token or global_name) = \"#{boot_token.to_s}\""
         
         server = WakameOS::Server.new
-        agent = WakameOS::Agent.new(boot_token)
+        agent = WakameOS::Agent.new(boot_token, parent_boot_token)
         server.start(config, agent.context)
       end
     end
