@@ -15,7 +15,7 @@ module WakameOS
         ret = nil
         @@driver_create_mutex.synchronize {
           provider_name = (provider_name == 'aws')? 'AWS' : provider_name.camel_case # :-(
-          logger.info "setup driver for provider named \"#{provider_name}\" with config."
+          logger.debug "setup driver for provider named \"#{provider_name}\" with config."
           eval_string = provider_name.to_s + '.new(config)'
           ret = eval(eval_string)
         }

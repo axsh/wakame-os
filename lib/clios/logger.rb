@@ -28,10 +28,10 @@ module WakameOS
     def self.included(klass)
       klass.class_eval {
 
-        @@class_logger = Log4r::Logger.new(klass.to_s)
+        @class_logger = Log4r::Logger.new(klass.to_s)
 
         def self.logger
-          @@class_logger
+          @class_logger
         end
 
         def logger
@@ -39,7 +39,7 @@ module WakameOS
         end
         
         def self.logger_name
-          @@class_logger.path
+          @class_logger.path
         end
 
         #def self.logger_name=(name)
