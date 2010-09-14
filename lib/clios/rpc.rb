@@ -49,24 +49,24 @@ module WakameOS
 
       def method_missing(method, *args, &blk)
         name = 'wakame.rpc.'+@queue_name
-        logger.info "setup the client rpc channel named \"#{name}\"."
+        logger.debug "setup the client rpc channel named \"#{name}\"."
         amqp = WakameOS::Client::Environment.create_amqp_client
         amqp.start
         remote = amqp.queue(name, :auto_delete => true)
         WakameOS::Client::SystemCall.instance.add_gc_target_queues([name])
-        logger.info "entried queue name as candidation of gabage."
+        logger.debug "entried queue name as candidation of gabage."
 
         response = nil
         response_id = "wakame.client.response-#{WakameOS::Utility::UniqueKey.new}"
         @rabbit_mutex.synchronize {
           response = amqp.queue(response_id, :auto_delete => true)
         }
-        logger.info "queue \"#{response_id}\" decrared."
+        logger.debug "queue \"#{response_id}\" decrared."
         message_id = WakameOS::Utility::UniqueKey.new
         @queue_monitor.synchronize {
           remote.publish(::Marshal.dump([method, *args]), :reply_to => response_id, :message_id => message_id)
         }
-        logger.info "published a message which has an id \"#{message_id}\"."
+        logger.debug "published a message which has an id \"#{message_id}\" to \"#{method.to_s}\"."
 
         still_watch = false
         begin
@@ -75,7 +75,7 @@ module WakameOS
         end while still_watch # TODO: fix a lazy code...
         response.delete
 
-        logger.info "response: #{package.inspect}"
+        logger.debug "response: #{package.inspect}"
         ret = ::Marshal.load(package[:payload])
 
         blk.call(ret) if blk
