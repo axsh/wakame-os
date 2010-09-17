@@ -2,7 +2,7 @@ module WakameOS
   module Client
     class SetupBase
       @@credential = nil
-      @@spec_name  = 'default'
+      @@spec_name  = nil
       @@option     = nil
       
       def self.credential;              @@credential;                  end

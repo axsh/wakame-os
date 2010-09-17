@@ -130,7 +130,8 @@ module WakameOS
                 logger.debug "** Job arrival: #{code}"
                 thread = Thread.new {
 
-                  Wakame::Environment.os_instance_name = @instance_name
+                  Wakame::Environment.os_instance_name     = @instance_name
+                  Wakame::Environment.os_default_spec_name = @spec_name
                   c = Class.new
                   c.instance_eval(code)
 
