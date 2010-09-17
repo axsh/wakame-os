@@ -32,15 +32,18 @@ module WakameOS
         end
 
         def fork(*argv, &block)
+          result = nil
+
           # TODO: Check the arity
           @mutex.synchronize {
-            _execute(WakameOS::Utility::Job::RubyProc.new({
-                                                            :code => WakameOS::Utility::ProcSerializer.dump({}, &block),
-                                                            :argv => argv,
-                                                          }))
+            result = _execute(WakameOS::Utility::Job::RubyProc.new({
+                                                                     :code => WakameOS::Utility::ProcSerializer.dump({}, &block),
+                                                                     :argv => argv,
+                                                                   }))
           }
+          return Ping.new(result)
         end
-
+        
         def fork_join(*argv, &block)
           result = nil
 
@@ -65,13 +68,11 @@ module WakameOS
         end
         
         def _execute(job, need_response=false)
-          result = nil
-
           amqp = WakameOS::Client::Environment.create_amqp_client
           amqp.start
 
           gc_targets = []
-          logger.info "Making a code queue."
+          logger.debug "Making a code queue."
           response_queue_name = nil
           gc_targets << request_queue_name  = "wakame.remote.request-#{WakameOS::Utility::UniqueKey.new}"
           gc_targets << response_queue_name = "wakame.remote.response-#{WakameOS::Utility::UniqueKey.new}" if need_response
@@ -80,31 +81,32 @@ module WakameOS
           response_queue = amqp.queue(response_queue_name, :auto_delete => true) if need_response
 
           request_queue.publish(::Marshal.dump(job))
-          logger.info "Insert a job request into the queue."
+          logger.debug "Insert a job request into the queue."
           response = @agent.process_jobs(@credential,
                                          [{:request => request_queue_name, :response => response_queue_name}],
                                          @spec_name)
-          logger.info "Response: " + response.inspect
-          
+          logger.debug "Response: " + response.inspect
+
+          result = response[:waiting_jobs][0] # ever one item.
           queue_count = response[:queue_count] || 0
           if response[:waiting_agents].size < queue_count
-            logger.info "New instance is required."
+            logger.debug "New instance is required."
             @instance.create_instances(@credential, @spec_name)
           end
-          logger.info "done the request."
+          logger.debug "done the request."
           
           if need_response
             item = nil
             need_loop = true
             begin 
               item = response_queue.pop
-              logger.info "RESPONSE (MARSHAL): " + item.inspect
+              logger.debug "RESPONSE (MARSHAL): " + item.inspect
               if need_loop = (item[:payload]==:queue_empty)
                 sleep 0.5 # TODO: lazy wait
               end
             end while need_loop
             result = ::Marshal.load(item[:payload])
-            logger.info "RESPONSE #{response_queue_name} (OBJECT): " + result.inspect
+            logger.debug "RESPONSE #{response_queue_name} (OBJECT): " + result.inspect
             response_queue.delete
           end
 
@@ -114,8 +116,51 @@ module WakameOS
         end
         protected :_execute
 
-    end
-      
-    end
+        class Ping
+          attr_reader :job_id
+
+          def initialize(job_id)
+            @job_id       = job_id.dup
+            @update_on    = DateTime.now
+            @cache_result = nil
+          end
+
+          def job_status
+            now = DateTime.now
+            if ((now - @update_on)*24*60*60*10).to_i > 5 || !@cache_result
+              @update_on = now
+              rpc = WakameOS::Client::SyncRpc.new('agent')
+              begin
+                result = nil
+                timeout(5) {
+                  result = rpc.job_status(@job_id).dup
+                }
+                @cache_result = result if result
+                logger.debug "cached result: #{@cache_result.inspect}"
+              rescue =>e
+                # nothing to do
+              end
+            end
+            return @cache_result
+          end
+
+          def available?
+            return job_status[:available]
+          end
+
+          def processing?
+            return job_status[:processing]
+          end
+
+          def agent_id
+            return job_status[:agent_id]
+          end
+
+        end # Ping
+
+      end # Remote
+
+    end # Process
+
   end
 end

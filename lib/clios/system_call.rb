@@ -461,6 +461,8 @@ module WakameOS
         @agents_index_mutex = Monitor.new
         @job_assign = {}
         @job_assign_mutex = Monitor.new
+        @job_id = {}
+        @job_id_mutex = Monitor.new
 
         @patrol_interval_sec = 5
         @patrol_credentials = {}
@@ -540,8 +542,11 @@ module WakameOS
               unless agent.job_id
                 @job_assign[agent_id] = agent
                 agent.assign_job(job_id)
-                ret = true
+                @job_id_mutex.synchronize {
+                  @job_id[job_id] = agent_id
+                }
                 logger.debug "* succeed to assign a job #{job_id} to agent #{agent_id}."
+                ret = true
               end
             }
           }
@@ -580,8 +585,11 @@ module WakameOS
               agent = @job_assign.delete(agent_id)
               if agent && agent.job_id
                 agent.finish_job
-                ret = true
+                @job_id_mutex.synchronize {
+                  @job_id.delete(job_id)
+                }
                 logger.debug "* succeed to finish a job #{job_id} to agent #{agent_id}."
+                ret = true
               end
             }
           }
@@ -636,11 +644,15 @@ module WakameOS
                              :auto_delete => true,
                              :exclusive => false) unless queue
 
-          job_array.each do |job|
-            job_package = Job.new(job, credential, spec_name)
-            queue.publish(::Marshal.dump(job_package))
-            waiting_jobs << job_package.name
-          end
+          @job_id_mutex.synchronize {
+            job_array.each do |job|
+              job_package = Job.new(job, credential, spec_name)
+              queue.publish(::Marshal.dump(job_package))
+              waiting_jobs << job_package.name
+              @job_id[job_package.name] = nil
+              logger.debug "new job #{job_package.name} entried into a queue."
+            end
+          }
           queue_count = queue.message_count
 
           hash = _user_credential_hash(credential)
@@ -666,6 +678,23 @@ module WakameOS
           amqp.stop
         }
         ret = ::Marshal.load(ret) if ret && (ret = ret[:payload])!=:queue_empty
+        ret
+      end
+
+      # Job ID report
+      def job_status(job_id)
+        ret = {
+          :available  => false, 
+          :processing => false,
+          :agent_id   => :unknown,
+        }
+        @job_id_mutex.synchronize {
+          ret[:available]  = true if @job_id.key?(job_id)
+          if agent_id = @job_id[job_id]
+            ret[:processing] = true 
+            ret[:agent_id]   = agent_id
+          end
+        }
         ret
       end
       
