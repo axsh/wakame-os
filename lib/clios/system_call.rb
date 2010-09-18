@@ -33,9 +33,9 @@ module WakameOS
         @@sequencial_number_mutex = Monitor.new
         @@sequencial_number = ::Kernel.rand(999_999_999_999)
 
-        def self.create(credential, driver_name, spec_name, instance)
-          self.new(credential, driver_name, spec_name, instance)
-        end
+#        def self.create(credential, driver_name, spec_name, instance)
+#          self.new(credential, driver_name, spec_name, instance)
+#        end
 
         attr_reader   :boot_token
         attr_reader   :credential
@@ -161,7 +161,7 @@ module WakameOS
           driver = _get_driver(spec)
           instances = driver.create_instances([_uncapsuled(spec.requirement).to_hash_from_table])
           instances.each do |instance|
-            parent_instance_name = credential.delete(:instance_name)
+            parent_instance_name = credential[:instance_name]
             wakame_instance = HybridInstance.new(credential, spec.driver, spec_name, spec, instance, parent_instance_name)
             @instance_list_mutex.synchronize {
               @instances_by_boot_token[wakame_instance.boot_token] = wakame_instance
@@ -503,7 +503,7 @@ module WakameOS
         return [] unless credential_array.is_a? Array
         ret = []
         credential_array.each do |credential|
-          if (boot_token = credential[:boot_token])
+          if (boot_token = credential[:boot_token] || credential[:instance_name])
             instance = nil
             begin
               instance = @instance_controller.search_instance(boot_token)
@@ -517,6 +517,7 @@ module WakameOS
                 }
                 _entry(instance.credential)
               }
+              logger.debug "agent info: #{agent.inspect}"
               ret << {
                 :agent_id      => agent_id,
                 :credential    => agent.instance.credential,
@@ -623,6 +624,7 @@ module WakameOS
         if instance_name && (instance = @instance_controller.search_instance(instance_name))
           parent_instance_name = instance.parent_instance_name || ''
         end
+        logger.debug "instance #{instance_name} has a parent named #{parent_instance_name}."
         @queue_name_prefix + parent_instance_name + '.' + spec_name + '.' + Digest::MD5.hexdigest(credential[:user] || '')
       end
       

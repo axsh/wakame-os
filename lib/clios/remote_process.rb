@@ -81,7 +81,7 @@ module WakameOS
           response_queue = amqp.queue(response_queue_name, :auto_delete => true) if need_response
 
           request_queue.publish(::Marshal.dump(job))
-          logger.debug "Insert a job request into the queue."
+          logger.debug "Insert a job request into the queue from #{@credential[:instance_name]}."
           response = @agent.process_jobs(@credential,
                                          [{:request => request_queue_name, :response => response_queue_name}],
                                          @spec_name)
@@ -90,7 +90,7 @@ module WakameOS
           result = response[:waiting_jobs][0] # ever one item.
           queue_count = response[:queue_count] || 0
           if response[:waiting_agents].size < queue_count
-            logger.debug "New instance is required."
+            logger.debug "New instance is required with #{@credential.inspect}."
             @instance.create_instances(@credential, @spec_name)
           end
           logger.debug "done the request."
