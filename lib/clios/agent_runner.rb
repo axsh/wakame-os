@@ -51,7 +51,7 @@ module WakameOS
         exit(1) if config[:require_exit]
         # Process.daemon if Process.respond_to?(:daemon) && !config[:daemonize]
         
-        logger.info "Token(boot_token or global_name) = \"#{boot_token.to_s}\""
+        logger.info "OPTION: Token(boot_token or global_name) = \"#{boot_token.to_s}\", (\"#{parent_boot_token.to_s}\" as parent)"
         
         server = WakameOS::Server.new
         agent = WakameOS::Agent.new(boot_token, parent_boot_token)

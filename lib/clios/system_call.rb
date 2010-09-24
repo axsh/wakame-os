@@ -30,32 +30,14 @@ module WakameOS
       class HybridInstance
         include Privilege
 
-        @@sequencial_number_mutex = Monitor.new
-        @@sequencial_number = ::Kernel.rand(999_999_999_999)
-
-#        def self.create(credential, driver_name, spec_name, instance)
-#          self.new(credential, driver_name, spec_name, instance)
-#        end
-
         attr_reader   :boot_token
         attr_reader   :credential
         attr_accessor :driver_name, :spec_name
 
-        attr_accessor :instance_name, :parent_instance_name, :child_instance_names
+        attr_accessor :instance_name
         attr_accessor :life_time
         attr_accessor :state, :create_on, :update_on, :alive
         
-        # TODO: Monitoring
-        # attr_accessor :cpu_usage, :memory_usage
-
-        def add_child_name(name)
-          (@child_instance_names << name).uniq!
-        end
-
-        def remove_child_name(name)
-          @child_instance_names -= [name]
-        end
-
         def touch
           @update_on = DateTime.now
         end
@@ -71,8 +53,6 @@ module WakameOS
             :driver => @driver_name,
             :specification => @spec_name,
             :instance_name => @instance_name,
-            :parent_instance_name => @parent_instance_name,
-            :child_instance_names => @child_instance_names,
             :state => @state,
             :alive => @alive,
             :life_time => @life_time,
@@ -81,20 +61,15 @@ module WakameOS
           }
         end
 
-        private
-        def initialize(credential, driver_name, spec_name, spec, instance, parent_instance_name=nil)
+        def initialize(credential, driver_name, spec_name, spec, instance)
+          @create_on = DateTime.now
+          @update_on = DateTime.now
 
-          @@sequencial_number_mutex.synchronize {
-            @boot_token = Digest::MD5.hexdigest(`/sbin/ip route get 8.8.8.8`+Time.now.to_i.to_s+@@sequencial_number.to_s)
-            @@sequencial_number += 1
-          }
-
+          @boot_token = instance.boot_token
           @credential = credential
           @driver_name = driver_name
           @spec_name = spec_name || 'default'
           @instance_name = instance.global_name
-          @parent_instance_name = parent_instance_name
-          @child_instance_names = []
           @state = instance.state.to_s
           @alive = true
           life_time = spec.life_time
@@ -106,9 +81,6 @@ module WakameOS
             :terminated    => life_time.terminated    ||   1*60,
             :accidental    => life_time.accidental    ||   1*60,
           }
-
-          @create_on = DateTime.now
-          @update_on = DateTime.now
         end
       end
       #####################################################################
@@ -159,15 +131,15 @@ module WakameOS
         spec = @catalog.spec(spec_name)
         if spec
           driver = _get_driver(spec)
-          instances = driver.create_instances([_uncapsuled(spec.requirement).to_hash_from_table])
+          instances = driver.create_instances([_uncapsuled(spec.requirement).to_hash_from_table.merge({
+                                                                                                        :wakame_parent_boot_token => credential[:boot_token],
+                                                                                                      })])
           instances.each do |instance|
-            parent_instance_name = credential[:instance_name]
-            wakame_instance = HybridInstance.new(credential, spec.driver, spec_name, spec, instance, parent_instance_name)
+            wakame_instance = HybridInstance.new(credential, spec.driver, spec_name, spec, instance)
             @instance_list_mutex.synchronize {
               @instances_by_boot_token[wakame_instance.boot_token] = wakame_instance
               @instances[wakame_instance.instance_name] = wakame_instance
               ret << wakame_instance.instance_name.dup
-              @instances[parent_instance_name].add_child_name(wakame_instance.instance_name) if parent_instance_name
             }
           end
         else
@@ -181,34 +153,19 @@ module WakameOS
 
         ret = []
         @instance_list_mutex.synchronize {
-          target_array = []
-          name_array.each do |name|
-            target_array += _destroy_instances_recursive(name)
-          end
-          logger.debug "destroy target (include children): "+ target_array.inspect
-          
-          target_array.uniq.each do |name|
+          name_array.uniq.each do |name|
             instance = @instances[name]
             if instance
               spec = @catalog.spec(instance.spec_name)
               driver = _get_driver(spec)
               if driver.destroy_instances([instance.instance_name])
                 ret << instance.instance_name
-                @instances[instance.parent_instance_name].remove_child_name(instance.instance_name) if instance.parent_instance_name
               end
             end
           end
         }
         ret
       end
-      def _destroy_instances_recursive(instance_name)
-        ret = [instance_name]
-        @instances[instance_name].child_instance_names.each do |child_instance_name|
-          ret += _destroy_instances_recursive(child_instance_name)
-        end
-        ret
-      end
-      protected :_destroy_instances_recursive
       
       def reboot_instances(credential, name_array)
         return false unless name_array.is_a?(Array) && name_array.size>0
@@ -356,22 +313,26 @@ module WakameOS
       class Agent
         include Privilege
 
-        attr_reader :agent_id, :instance, :spec_name
-        attr_reader :job_id
+        attr_reader :agent_id, :boot_token, :instance, :spec_name
+        attr_reader :job
 
         def initialize(instance)
-          @instance = instance
+          @instance   = instance
           @credential = instance.credential
-          @spec_name = instance.spec_name.dup
-          @agent_id = instance.instance_name
-          @alive = true
-          @job_id = nil
+          @spec_name  = instance.spec_name.dup
+
+          @boot_token = instance.boot_token
+          @agent_id   = instance.instance_name
+
+          @alive  = true
+          @job    = nil
+
           @create_on = DateTime.now
           @update_on = DateTime.now
-          @woke_on = DateTime.now
+          @woke_on   = DateTime.now
           @work_time = 0.0
         end
-        
+
         def touch
           @update_on = DateTime.now
           @instance.touch if @instance && @instance.alive
@@ -391,56 +352,81 @@ module WakameOS
 
         def work_time
           now = DateTime.now
-          if @job_id
+          if @job
             @work_time += now - @work_on
             @work_on = now
           end
           return (@work_time / (now - @create_on)).to_f
         end
 
-        def assign_job(job_id)
+        def assign_job(job)
           finish_job
           @work_on = DateTime.now
-          @job_id = job_id
+          @job = job
         end
         
         def finish_job
-          return unless @job_id
+          return unless @job
           now = DateTime.now
-          @job_id = nil
+          @job = nil
           @work_time += now - @work_on
         end
 
         def to_hash
-          {
-            :agent_id  => @agent_id,
-            :alive     => @alive,
-            :job_id    => @job_id,
-            :work      => self.work_time,
-            :instance  => (@instance || {}).to_hash,
-            :create_on => @create_on.to_s,
-            :update_on => @update_on.to_s,
+          ret = {
+            :agent_id           => @agent_id,
+            :parent_agent_id    => @parent_agent_id,
+            :children_agent_ids => @children_agent_ids,
+            :alive              => @alive,
+            :job                => {},
+            :work               => self.work_time,
+            :boot_token         => @boot_token,
+            :instance           => {},
+            :create_on          => @create_on.to_s,
+            :update_on          => @update_on.to_s,
           }
+          ret[:job]      = @job.to_hash      if @job
+          ret[:instance] = @instance.to_hash if @instance
+          ret
         end
       end
       
       class Job
-        attr_reader :job, :credential, :spec_name
+        attr_reader :job, :job_id, :parent_job_id, :children_job_ids, :credential, :spec_name
+
         def initialize(job, credential,  spec_name)
           @job        = job
           @credential = credential
           @spec_name  = spec_name
-          @job_id     = WakameOS::Utility::UniqueKey.new
+
+          @job_id           = WakameOS::Utility::UniqueKey.new
+          @parent_job_id    = credential[:job_id]
+          @children_job_ids = []
         end
+
         def to_hash
           {
-            :job_id => @job_id,
-            :job => @job,
+            :job_id              => @job_id,
+            :parent_job_id       => @parent_job_id,
+            :children_job_ids    => @children_job_ids,
+            :job                 => @job,
           }
         end
-        def name
-          "#{@job_id}"
+
+        alias :name :job_id
+        
+        def remove_parent_job_id
+          @parent_job_id = nil
         end
+
+        def add_child_job_id(job_id)
+          (@children_job_ids << job_id).uniq!
+        end
+
+        def remove_child_job_id(job_id)
+          @children_job_ids.delete(job_id)
+        end
+
       end
       
       ##################################################################
@@ -483,18 +469,26 @@ module WakameOS
             _agents(hash).values.each do |agent|
               ret << agent.to_hash if 
                 agent.allow?(user_credential) && 
-                ((has_job && agent.job_id) || !has_job)
+                ((has_job && agent.job) || !has_job)
             end
           }
         else
           @agents_index_mutex.synchronize {
             @agents_index.values.each do |agent|
               ret << agent.to_hash if
-                (has_job && agent.job_id) || !has_job
+                (has_job && agent.job) || !has_job
             end
           }
         end
         ret
+      end
+
+      def search_agent(agent_id)
+        ret = nil
+        @agents_index_mutex.synchronize {
+          ret = @agents_index[agent_id]
+        }
+        ret   
       end
 
       # Agent (Waiting worker) Registration
@@ -506,24 +500,25 @@ module WakameOS
           if (boot_token = credential[:boot_token] || credential[:instance_name])
             instance = nil
             begin
-              instance = @instance_controller.search_instance(boot_token)
-              agent = Agent.new(instance)
-              agent_id = agent.agent_id
-              hash = _user_credential_hash(instance.credential)
-              _agent_list_mutex(hash).synchronize {
-                _agents(hash, agent_id, agent) # update
-                @agents_index_mutex.synchronize {
+              @agents_index_mutex.synchronize {
+                logger.debug "agent entry: #{credential.inspect}"
+                instance = @instance_controller.search_instance(boot_token)
+                agent = Agent.new(instance)
+                agent_id = agent.agent_id
+                hash = _user_credential_hash(instance.credential)
+                _agent_list_mutex(hash).synchronize {
+                  _agents(hash, agent_id, agent) # update
                   @agents_index[agent_id] = agent
+                  _entry(instance.credential)
                 }
-                _entry(instance.credential)
-              }
-              logger.debug "agent info: #{agent.inspect}"
-              ret << {
-                :agent_id      => agent_id,
-                :credential    => agent.instance.credential,
-                :instance_name => agent.instance.instance_name,
-                :spec_name     => agent.spec_name,
-                :queue_name    => queue_name(agent.instance.credential, agent.spec_name),
+                logger.debug "agent info: #{agent.inspect}"
+                ret << {
+                  :agent_id        => agent_id,
+                  :credential      => agent.instance.credential,
+                  :instance_name   => agent.instance.instance_name,
+                  :spec_name       => agent.spec_name,
+                  :queue_name      => queue_name(agent.instance.credential[:user], agent.spec_name),
+                }
               }
             rescue InstanceController::InstanceNotFound => e
               ret = e
@@ -534,27 +529,25 @@ module WakameOS
       end
       
       # Assign a job (agent's credential)
-      def assign_job(credential, job_id)
+      def assign_job(credential, job)
         ret = false
         if (agent_id = credential[:agent_id])
           @job_assign_mutex.synchronize {
             @agents_index_mutex.synchronize {
               agent = @agents_index[agent_id]
-              unless agent.job_id
+              unless agent && agent.job
                 @job_assign[agent_id] = agent
-                agent.assign_job(job_id)
+                agent.assign_job(job)
                 @job_id_mutex.synchronize {
-                  @job_id[job_id] = agent_id
+                  @job_id[job.job_id] = job
+                  if job.parent_job_id && (parent_job = @job_id[job.parent_job_id])
+                    parent_job.add_child_job_id(job.job_id)
+                  end
                 }
-                logger.debug "* succeed to assign a job #{job_id} to agent #{agent_id}."
+                logger.debug "* succeed to assign a job #{job.job_id} to agent #{agent_id}."
                 ret = true
               end
             }
-          }
-          logger.debug list_agents.inspect
-          Thread.new {
-            sleep 3
-            logger.debug list_agents.inspect
           }
         end
         ret
@@ -565,31 +558,35 @@ module WakameOS
         ret = []
         credential_array.each do |credential|
           if (agent_id = credential[:agent_id])
-            agent = nil
             @agents_index_mutex.synchronize {
-              agent = @agents_index[agent_id]
-            }
-            _agent_list_mutex(_user_credential_hash(agent.instance.credential)).synchronize {
-              agent.touch if agent
+              if (agent = @agents_index[agent_id])
+                _agent_list_mutex(_user_credential_hash(agent.instance.credential)).synchronize {
+                  agent.touch
+                }
+              end
             }
           end
-       end if credential_array.is_a? Array
+        end if credential_array.is_a? Array
         ret
       end
       
       # Finished the job
-      def finish_job(credential, job_id)
+      def finish_job(credential, job)
         ret = false
         if (agent_id = credential[:agent_id])
           @job_assign_mutex.synchronize {
             @agents_index_mutex.synchronize {
               agent = @job_assign.delete(agent_id)
-              if agent && agent.job_id
+              if agent && agent.job
                 agent.finish_job
                 @job_id_mutex.synchronize {
-                  @job_id.delete(job_id)
+                  if job.parent_job_id && (parent_job = @job_id[job.parent_job_id])
+                    parent_job.remove_child_job_id(job.job_id)
+                    job.remove_parent_job_id
+                  end
+                  @job_id.delete(job.job_id)
                 }
-                logger.debug "* succeed to finish a job #{job_id} to agent #{agent_id}."
+                logger.debug "* succeed to finish a job #{job.job_id} to agent #{agent_id}."
                 ret = true
               end
             }
@@ -618,14 +615,8 @@ module WakameOS
       end
       
       # Job Registration (use a user credential)
-      def queue_name(credential, spec_name='default')
-        parent_instance_name = ''
-        instance_name = credential[:instance_name]
-        if instance_name && (instance = @instance_controller.search_instance(instance_name))
-          parent_instance_name = instance.parent_instance_name || ''
-        end
-        logger.debug "instance #{instance_name} has a parent named #{parent_instance_name}."
-        @queue_name_prefix + parent_instance_name + '.' + spec_name + '.' + Digest::MD5.hexdigest(credential[:user] || '')
+      def queue_name(user_name, spec_name='default')
+        @queue_name_prefix + spec_name + '.' + Digest::MD5.hexdigest(user_name || '')
       end
       
       def process_jobs(credential, job_array, spec_name='default')
@@ -637,7 +628,7 @@ module WakameOS
         queue_count = nil
 
         queue = nil
-        name = queue_name(credential, spec_name)
+        name = queue_name(credential[:user], spec_name)
         @@amqp_mutex.synchronize {
           amqp = WakameOS::Client::Environment.create_amqp_client
           amqp.start
@@ -652,7 +643,7 @@ module WakameOS
               queue.publish(::Marshal.dump(job_package))
               waiting_jobs << job_package.name
               @job_id[job_package.name] = nil
-              logger.debug "new job #{job_package.name} entried into a queue."
+              logger.debug "new job #{job_package.name} entried into a queue \"#{name}\"."
             end
           }
           queue_count = queue.message_count
@@ -748,6 +739,7 @@ module WakameOS
                   logger.debug "Agent ID: #{agent_id} is gone."
                   agent.destroy
                   @agents_index_mutex.synchronize {
+                    @agents_boot_token_index.delete(agent.boot_token)
                     @agents_index.delete(agent_id)
                   }
                 end

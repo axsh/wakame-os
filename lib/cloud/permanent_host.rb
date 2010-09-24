@@ -45,8 +45,8 @@ module WakameOS
             @@instances[i.global_name] = i
           }
 
-          parent_global_name = option_hash[:wakame_parent_instance_name]
-          _start_agent(i.global_name, parent_global_name)
+          parent_boot_token = option_hash[:wakame_parent_boot_token]
+          _start_agent(i.global_name, i.boot_token, parent_boot_token)
         end
         ret
       end
@@ -99,7 +99,7 @@ module WakameOS
       end
       protected :_purge
 
-      def _start_agent(global_name, parent_global_name=nil)
+      def _start_agent(global_name, boot_token, parent_boot_token=nil)
         pid = nil
         @@agent_mutex.synchronize {
           pid = @@agents[global_name]
@@ -107,8 +107,8 @@ module WakameOS
         }
         return if pid!=nil
         if !(pid = Process.fork)
-          argv  = ['./bin/agent', '--token', global_name.to_s]
-          argv += ['--parent_token', parent_global_name] if parent_global_name
+          argv  = ['./bin/agent', '--token', boot_token.to_s]
+          argv += ['--parent_token', parent_boot_token.to_s] if parent_boot_token
           exec *argv
           exit
         end
@@ -118,9 +118,9 @@ module WakameOS
       end
       protected :_start_agent
 
-      def _stop_agent(global_name)
+      def _stop_agent(boot_token)
         @@agent_mutex.synchronize {
-          pid = @@agents.delete(global_name)
+          pid = @@agents.delete(boot_token)
           if pid && pid>0
             begin
               Process.kill(:HUP, pid)

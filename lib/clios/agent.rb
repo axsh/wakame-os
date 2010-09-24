@@ -16,7 +16,7 @@ module WakameOS
     #####################################################################
     # Member
     attr_reader :client
-    attr_reader :boot_token, :parent_boot_token, :agent_id, :alive
+    attr_reader :boot_token, :parent_boot_token, :agent_id, :parent_agent_id, :alive
     attr_reader :instance_name, :queue_name
     
     #####################################################################
@@ -27,6 +27,8 @@ module WakameOS
       @boot_token           = boot_token
       @parent_boot_token    = parent_boot_token
       @agent_id             = nil
+      @parent_agent_id      = parent_agent_id
+      @job_id               = nil
       @credential           = nil
       @spec_name            = nil
 
@@ -39,19 +41,24 @@ module WakameOS
       @client_mutex         = Monitor.new
       @queue_name           = ''
 
-      credential = {:boot_token => boot_token}
+      credential = {
+        :boot_token        => boot_token,
+        :parent_boot_token => parent_boot_token,
+      }
+      logger.debug "* ENTRY: #{credential.inspect}"
 
       # Negotiation
       @client = WakameOS::Client::SyncRpc.new('agent')
       results = @client.entry_agents([credential])
       results.each do |result|
-        @agent_id      = result[:agent_id]
-        @credential    = result[:credential]
-        @instance_name = result[:instance_name]
-        @spec_name     = result[:spec_name ]
-        @queue_name    = result[:queue_name]
+        @agent_id        = result[:agent_id]
+        @parent_agent_id = result[:parent_agent_id]
+        @credential      = result[:credential]
+        @instance_name   = result[:instance_name]
+        @spec_name       = result[:spec_name ]
+        @queue_name      = result[:queue_name]
       end
-      logger.debug "Entry: #{results.inspect}"
+      logger.debug "* ENTRIED: #{results.inspect}"
       
       # Finalization
       [:EXIT, :TERM].each do |sig|
@@ -76,7 +83,7 @@ module WakameOS
         queue = nil
 
         logger.debug "Job picker setup."
-        amqp = WakameOS::Client::Environment.create_amqp_client
+        amqp = Wakame::Environment.create_amqp_client
         amqp.start
         queue = amqp.queue(@queue_name, :auto_delete => true, :exclusive => false)
         thread_queue = Queue.new
@@ -89,19 +96,24 @@ module WakameOS
           data = queue.pop
           logger.debug "Agent ID: #{@agent_id} picked a job up from #{@queue_name} ... #{data.inspect}"
           unless data[:payload]==:queue_empty
+            ######################
             # WE GOT A JOB REQUEST
             touch
 
             job = ::Marshal.load(data[:payload])
+            @job_id = job.job_id
+            request_queue_name  = job.job[:request]
+            response_queue_name = job.job[:response]
             logger.debug "** A job will come from #{job.inspect}"
 
             @client_mutex.synchronize {
-              @assigned = true if @client.assign_job(_credential, job.name)
+              @assigned = true if @client.assign_job(_credential, job)
             }
 
             # job.credential
             # job.spec_name
-            direct_queue = amqp.queue(job.job[:request], :auto_delete => true)
+            logger.debug "Code will come from \"#{request_queue_name}\"."
+            direct_queue = amqp.queue(request_queue_name, :auto_delete => true)
             counter = 10
             begin
               logger.debug "Waiting a receiving code..."
@@ -130,8 +142,10 @@ module WakameOS
                 logger.debug "** Job arrival: #{code}"
                 thread = Thread.new {
 
+                  Wakame::Environment.os_boot_token        = @boot_token
                   Wakame::Environment.os_instance_name     = @instance_name
                   Wakame::Environment.os_default_spec_name = @spec_name
+                  Wakame::Environment.os_job_id            = @job_id
                   c = Class.new
                   c.instance_eval(code)
 
@@ -150,10 +164,11 @@ module WakameOS
                     end
                   end
 
-                  if job.job[:response]
-                    response_queue = amqp.queue(job.job[:response], :auto_delete => true)
+                  if response_queue_name
+                    response_queue = amqp.queue(response_queue_name, :auto_delete => true)
                     response_queue.publish(::Marshal.dump(result))
                   end
+                  logger.debug "Done the job! #{job.inspect}"
                 }
                 thread.join
                 request_count = 0
@@ -166,7 +181,7 @@ module WakameOS
             end while counter>0
 
             @client_mutex.synchronize {
-              @assigned = false if @client.finish_job(_credential, job.name)
+              @assigned = false if @client.finish_job(_credential, job)
             }
             logger.info "Exit, try to find a next job."
           end
@@ -185,7 +200,10 @@ module WakameOS
 
     def touch(working=true)
       @client_mutex.synchronize {
-        @client.touch_agents([_credential]) if working
+        if working
+          ret = @client.touch_agents([_credential])
+          logger.warn "Agent #{@agent_id} heart beated."
+        end        
       }
     end
 
@@ -202,6 +220,8 @@ module WakameOS
         :boot_token        => @boot_token,
         :parent_boot_token => @parent_boot_token,
         :agent_id          => @agent_id,
+        :parent_agent_id   => @parent_agent_id,
+        :job_id            => @job_id,
       }
     end
     protected :_credential

@@ -1,4 +1,5 @@
 require 'clios'
+require 'util'
 
 require 'rubygems'
 require 'bunny'
@@ -16,7 +17,9 @@ module WakameOS
           :os_user              => ENV['USER']                        || 'wakame',
           :os_secret_key        => ENV['WAKAME_OS_SECRET_KEY']        || nil,
           :os_default_spec_name => ENV['WAKAME_OS_DEFAULT_SPEC_NAME'] || 'default',
-          :os_instance_name     => nil,
+          :os_instance_name     => ENV['WAKAME_OS_INSTANCE_NAME']     || nil,
+          :os_boot_token        => ENV['WAKAME_OS_BOOT_TOKEN']        || WakameOS::Utility::UniqueKey.new,
+          :os_job_id            => ENV['WAKAME_OS_JOB_ID']            || nil,
         }.merge(option)
       end
 
@@ -28,9 +31,11 @@ module WakameOS
       def self.os_user_credential
         init unless @@env
         {
-          :user          => @@env[:os_user],
-          :secret_key    => @@env[:os_secret_key],
-          :instance_name => @@env[:os_instance_name],
+          :user              => @@env[:os_user],
+          :secret_key        => @@env[:os_secret_key],
+          :instance_name     => @@env[:os_instance_name],
+          :boot_token        => @@env[:os_boot_token],
+          :job_id            => @@env[:os_job_id],
         }
       end
 

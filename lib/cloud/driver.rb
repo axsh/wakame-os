@@ -41,12 +41,13 @@ module WakameOS
         ACCIDENTAL = Status.new(6, 'accidental')
       end
 
-      attr_accessor :provider, :global_name, :local_name, :state, :public_ips, :private_ips
+      attr_accessor :provider, :boot_token, :global_name, :local_name, :state, :public_ips, :private_ips
       attr_accessor :create_on, :update_on, :extra_information
 
       attr_reader :driver
       def initialize(driver)
         @provider = 'UNKNOWN'
+        @boot_token = WakameOS::Utility::UniqueKey.new
         @global_name = 'UNKNOWN'
         @local_name = 'UNKNOWN'
         @state = Status::UNKNOWN
