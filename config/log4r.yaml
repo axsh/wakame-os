@@ -16,7 +16,7 @@ log4r_config:
       type: StdoutOutputter
       formatter:
         type: PatternFormatter
-        pattern: "%d %c [%l]: %M"
+        pattern: "%d %c [%l] %h(%p): %M"
         date_pattern: "%Y/%m/%d %H:%M:%S"
     - name: log_file
       type: FileOutputter
