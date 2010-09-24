@@ -562,6 +562,7 @@ module WakameOS
               if (agent = @agents_index[agent_id])
                 _agent_list_mutex(_user_credential_hash(agent.instance.credential)).synchronize {
                   agent.touch
+                  ret << agent_id
                 }
               end
             }
